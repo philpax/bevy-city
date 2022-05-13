@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "crates/bevy-city"
+]
+resolver = "2"
