@@ -266,17 +266,8 @@ pub enum SectionData {
     NodeName(String),
     Unknown,
 }
-
-#[derive(Debug, PartialEq)]
-pub struct Section {
-    pub section_type: SectionType,
-    pub version: u32,
-    pub children: Vec<Section>,
-    pub data: SectionData,
-}
-
-impl Section {
-    fn parse_texture(input: &[u8]) -> IResult<&[u8], SectionData> {
+impl SectionData {
+    fn parse_texture(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, filtering) = nom::combinator::map(nc::le_u8, |v| {
             num_traits::FromPrimitive::from_u8(v).unwrap()
         })(input)?;
@@ -304,7 +295,7 @@ impl Section {
         ))
     }
 
-    fn parse_material(input: &[u8], version: u32) -> IResult<&[u8], SectionData> {
+    fn parse_material(input: &[u8], version: u32) -> IResult<&[u8], Self> {
         let (input, _flags) = nc::le_u32(input)?;
         let (input, color) = Color::parse(input)?;
         let (input, _unused) = nc::le_u32(input)?;
@@ -320,20 +311,20 @@ impl Section {
         ))
     }
 
-    fn parse_material_list(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_material_list(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, material_count) = nc::le_u32(input)?;
         let (input, material_indices) =
             nom::multi::count(nc::le_i32, material_count as usize)(input)?;
         Ok((input, SectionData::MaterialList { material_indices }))
     }
 
-    fn parse_frame_list(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_frame_list(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, frame_count) = nc::le_u32(input)?;
         let (input, frames) = nom::multi::count(Frame::parse, frame_count as usize)(input)?;
         Ok((input, SectionData::FrameList(frames)))
     }
 
-    fn parse_geometry_data(input: &[u8], version: u32) -> IResult<&[u8], SectionData> {
+    fn parse_geometry_data(input: &[u8], version: u32) -> IResult<&[u8], Self> {
         let (input, (format, triangle_count, vertices_count, morph_target_count)) =
             tuple((nc::le_u32, nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
 
@@ -368,7 +359,7 @@ impl Section {
         ))
     }
 
-    fn parse_clump_data(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_clump_data(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (atomic_count, light_count, camera_count)) =
             tuple((nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
 
@@ -382,7 +373,7 @@ impl Section {
         ))
     }
 
-    fn parse_atomic_data(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_atomic_data(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (frame_index, geometry_index, flags, _unused)) =
             tuple((nc::le_u32, nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
 
@@ -401,7 +392,7 @@ impl Section {
         ))
     }
 
-    fn parse_texture_dictionary(input: &[u8], version: u32) -> IResult<&[u8], SectionData> {
+    fn parse_texture_dictionary(input: &[u8], version: u32) -> IResult<&[u8], Self> {
         if version < 0x3_6000 {
             let (input, texture_count) = nc::le_u32(input)?;
             Ok((
@@ -423,16 +414,12 @@ impl Section {
         }
     }
 
-    fn parse_geometry_list(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_geometry_list(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, geometry_count) = nc::le_u32(input)?;
         Ok((input, SectionData::GeometryList { geometry_count }))
     }
 
-    fn parse_struct(
-        input: &[u8],
-        parent_type: SectionType,
-        version: u32,
-    ) -> IResult<&[u8], SectionData> {
+    fn parse_struct(input: &[u8], parent_type: SectionType, version: u32) -> IResult<&[u8], Self> {
         Ok(match parent_type {
             SectionType::Texture => Self::parse_texture(input)?,
             SectionType::Material => Self::parse_material(input, version)?,
@@ -447,7 +434,7 @@ impl Section {
         })
     }
 
-    fn parse_string(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_string(input: &[u8]) -> IResult<&[u8], Self> {
         Ok((
             &[],
             SectionData::String(
@@ -458,13 +445,23 @@ impl Section {
         ))
     }
 
-    fn parse_node_name(input: &[u8]) -> IResult<&[u8], SectionData> {
+    fn parse_node_name(input: &[u8]) -> IResult<&[u8], Self> {
         Ok((
             &[],
             SectionData::NodeName(String::from_utf8_lossy(input).to_string()),
         ))
     }
+}
 
+#[derive(Debug, PartialEq)]
+pub struct Section {
+    pub section_type: SectionType,
+    pub version: u32,
+    pub children: Vec<Section>,
+    pub data: SectionData,
+}
+
+impl Section {
     fn parse(input: &[u8], parent_type: Option<SectionType>) -> IResult<&[u8], Section> {
         let (input, section_type) = nc::le_u32(input)?;
         let section_type = num_traits::FromPrimitive::from_u32(section_type)
@@ -482,9 +479,9 @@ impl Section {
         let (input, data) = bc::take(section_size)(input)?;
 
         let (mut data, section_data) = match section_type {
-            SectionType::Struct => Self::parse_struct(data, parent_type.unwrap(), version)?,
-            SectionType::String => Self::parse_string(data)?,
-            SectionType::NodeName => Self::parse_node_name(data)?,
+            SectionType::Struct => SectionData::parse_struct(data, parent_type.unwrap(), version)?,
+            SectionType::String => SectionData::parse_string(data)?,
+            SectionType::NodeName => SectionData::parse_node_name(data)?,
             SectionType::Clump
             | SectionType::GeometryList
             | SectionType::FrameList
