@@ -312,4 +312,21 @@ impl Section {
             },
         ))
     }
+
+    pub fn find_children_by_type(
+        &self,
+        section_type: SectionType,
+    ) -> impl Iterator<Item = &Section> {
+        self.children
+            .iter()
+            .filter(move |s| s.section_type == section_type)
+    }
+
+    pub fn find_child_by_type(&self, section_type: SectionType) -> Option<&Section> {
+        self.find_children_by_type(section_type).next()
+    }
+
+    pub fn get_child_struct_data(&self) -> Option<&SectionData> {
+        Some(&self.find_child_by_type(SectionType::Struct)?.data)
+    }
 }
