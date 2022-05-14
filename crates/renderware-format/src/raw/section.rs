@@ -3,48 +3,62 @@ use nom::{bytes::complete as bc, number::complete as nc, sequence::tuple, IResul
 use super::{constants::*, Color, Frame, GeometryData, Lighting, MorphTarget, UnparsedData};
 
 #[derive(Debug, PartialEq)]
+pub struct Texture {
+    pub filtering: TextureFiltering,
+    pub u: TextureAddressing,
+    pub v: TextureAddressing,
+    pub mipmaps_used: bool,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Material {
+    pub color: Color,
+    pub is_textured: bool,
+    pub lighting: Option<Lighting>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Geometry {
+    pub format: GeometryFormat,
+    pub lighting: Option<Lighting>,
+    pub data: Option<GeometryData>,
+    pub morph_targets: Vec<MorphTarget>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Clump {
+    pub atomic_count: u32,
+    pub light_count: u32,
+    pub camera_count: u32,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Atomic {
+    pub frame_index: u32,
+    pub geometry_index: u32,
+    // Render if in view frustum
+    pub render: bool,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TextureDictionary {
+    pub texture_count: u32,
+    pub device_id: Option<u16>,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum SectionData {
     Struct(UnparsedData),
     String(String),
-    Texture {
-        filtering: TextureFiltering,
-        u: TextureAddressing,
-        v: TextureAddressing,
-        mipmaps_used: bool,
-    },
-    Material {
-        color: Color,
-        is_textured: bool,
-        lighting: Option<Lighting>,
-    },
-    MaterialList {
-        material_indices: Vec<i32>,
-    },
+    Texture(Texture),
+    Material(Material),
+    MaterialList { material_indices: Vec<i32> },
     FrameList(Vec<Frame>),
-    Geometry {
-        format: GeometryFormat,
-        lighting: Option<Lighting>,
-        geometry_data: Option<GeometryData>,
-        morph_targets: Vec<MorphTarget>,
-    },
-    Clump {
-        atomic_count: u32,
-        light_count: u32,
-        camera_count: u32,
-    },
-    Atomic {
-        frame_index: u32,
-        geometry_index: u32,
-        // Render if in view frustum
-        render: bool,
-    },
-    TextureDictionary {
-        texture_count: u32,
-        device_id: Option<u16>,
-    },
-    GeometryList {
-        geometry_count: u32,
-    },
+    Geometry(Geometry),
+    Clump(Clump),
+    Atomic(Atomic),
+    TextureDictionary(TextureDictionary),
+    GeometryList { geometry_count: u32 },
     NodeName(String),
     Unknown,
 }
@@ -68,12 +82,12 @@ impl SectionData {
 
         Ok((
             input,
-            SectionData::Texture {
+            SectionData::Texture(Texture {
                 filtering,
                 u,
                 v,
                 mipmaps_used,
-            },
+            }),
         ))
     }
 
@@ -85,11 +99,11 @@ impl SectionData {
         let (input, lighting) = nom::combinator::cond(version > 0x3_0400, Lighting::parse)(input)?;
         Ok((
             input,
-            SectionData::Material {
+            SectionData::Material(Material {
                 color,
                 is_textured,
                 lighting,
-            },
+            }),
         ))
     }
 
@@ -114,7 +128,7 @@ impl SectionData {
         let format = GeometryFormat::from_bits(format & 0x0000_FFFF).unwrap();
 
         let (input, lighting) = nom::combinator::cond(version < 0x3_4000, Lighting::parse)(input)?;
-        let (input, geometry_data) =
+        let (input, data) =
             nom::combinator::cond(!format.contains(GeometryFormat::NATIVE), |input| {
                 GeometryData::parse(
                     input,
@@ -132,12 +146,12 @@ impl SectionData {
 
         Ok((
             input,
-            SectionData::Geometry {
+            SectionData::Geometry(Geometry {
                 format,
                 lighting,
-                geometry_data,
+                data,
                 morph_targets,
-            },
+            }),
         ))
     }
 
@@ -147,11 +161,11 @@ impl SectionData {
 
         Ok((
             input,
-            SectionData::Clump {
+            SectionData::Clump(Clump {
                 atomic_count,
                 light_count,
                 camera_count,
-            },
+            }),
         ))
     }
 
@@ -166,11 +180,11 @@ impl SectionData {
 
         Ok((
             input,
-            SectionData::Atomic {
+            SectionData::Atomic(Atomic {
                 frame_index,
                 geometry_index,
                 render,
-            },
+            }),
         ))
     }
 
@@ -179,19 +193,19 @@ impl SectionData {
             let (input, texture_count) = nc::le_u32(input)?;
             Ok((
                 input,
-                SectionData::TextureDictionary {
+                SectionData::TextureDictionary(TextureDictionary {
                     texture_count,
                     device_id: None,
-                },
+                }),
             ))
         } else {
             let (input, (texture_count, device_id)) = tuple((nc::le_u16, nc::le_u16))(input)?;
             Ok((
                 input,
-                SectionData::TextureDictionary {
+                SectionData::TextureDictionary(TextureDictionary {
                     texture_count: texture_count as u32,
                     device_id: Some(device_id),
-                },
+                }),
             ))
         }
     }
