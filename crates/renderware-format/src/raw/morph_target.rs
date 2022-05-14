@@ -4,9 +4,9 @@ use super::{Sphere, Vec3};
 
 #[derive(Debug, PartialEq)]
 pub struct MorphTarget {
-    bounding_sphere: Sphere,
-    vertices: Option<Vec<Vec3>>,
-    normals: Option<Vec<Vec3>>,
+    pub bounding_sphere: Sphere,
+    pub vertices: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
 }
 impl MorphTarget {
     pub(crate) fn parse(input: &[u8], vertices_count: u32) -> IResult<&[u8], Self> {
@@ -25,8 +25,8 @@ impl MorphTarget {
             input,
             MorphTarget {
                 bounding_sphere,
-                vertices,
-                normals,
+                vertices: vertices.unwrap_or_default(),
+                normals: normals.unwrap_or_default(),
             },
         ))
     }

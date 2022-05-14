@@ -4,8 +4,8 @@ use super::{Mat3, Vec3};
 
 #[derive(Debug, PartialEq)]
 pub struct Frame {
-    rotation: Mat3,
-    position: Vec3,
+    pub rotation: Mat3,
+    pub position: Vec3,
 }
 impl Frame {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {

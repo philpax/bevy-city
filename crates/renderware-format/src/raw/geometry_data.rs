@@ -4,9 +4,9 @@ use super::{Color, Triangle};
 
 #[derive(Debug, PartialEq)]
 pub struct GeometryData {
-    prelit_color: Option<Vec<Color>>,
-    texture_sets: Vec<Vec<(f32, f32)>>,
-    triangles: Vec<Triangle>,
+    pub prelit_color: Option<Vec<Color>>,
+    pub texture_sets: Vec<Vec<(f32, f32)>>,
+    pub triangles: Vec<Triangle>,
 }
 impl GeometryData {
     pub(crate) fn parse(
