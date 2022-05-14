@@ -1,11 +1,21 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{ArgEnum, Parser};
 use renderware_format as rwf;
 
-#[derive(Parser, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+enum Mode {
+    Raw,
+    Processed,
+}
+
+#[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    /// What mode to run the program in
+    #[clap(arg_enum, short, long)]
+    mode: Mode,
+
     /// Path of the file to inspect
     #[clap()]
     path: PathBuf,
@@ -25,6 +35,9 @@ fn print_section(section: &rwf::raw::Section, depth: i32) {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let file = rwf::raw::BinaryStreamFile::open(args.path)?;
-    print_section(&file.sections[0], 0);
+    match args.mode {
+        Mode::Raw => print_section(&file.sections[0], 0),
+        Mode::Processed => println!("{:?}", rwf::dff::Model::from_raw(&file)),
+    }
     Ok(())
 }
