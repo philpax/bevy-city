@@ -11,7 +11,7 @@ struct Args {
     path: PathBuf,
 }
 
-fn print_section(section: &rwf::Section, depth: i32) {
+fn print_section(section: &rwf::raw::Section, depth: i32) {
     print!("{}", "  ".repeat(depth as usize));
     println!(
         "{:?}({:X}): {:?}",
@@ -24,7 +24,7 @@ fn print_section(section: &rwf::Section, depth: i32) {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let file = rwf::BinaryStreamFile::open(args.path)?;
+    let file = rwf::raw::BinaryStreamFile::open(args.path)?;
     print_section(&file.sections[0], 0);
     Ok(())
 }
