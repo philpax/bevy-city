@@ -3,5 +3,6 @@ members = [
     "crates/bevy-city",
     "crates/renderware-format",
     "crates/renderware-format-dumper",
+    "crates/bevy_renderware",
 ]
 resolver = "2"
