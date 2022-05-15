@@ -1,4 +1,6 @@
-use nom::{bytes::complete as bc, number::complete as nc, sequence::tuple, IResult};
+use nom::{
+    bytes::complete as bc, combinator::cond, number::complete as nc, sequence::tuple, IResult,
+};
 
 use super::{constants::*, Color, Frame, GeometryData, Lighting, MorphTarget, UnparsedData};
 
@@ -155,9 +157,13 @@ impl SectionData {
         ))
     }
 
-    fn parse_clump_data(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, (atomic_count, light_count, camera_count)) =
-            tuple((nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
+    fn parse_clump_data(input: &[u8], version: u32) -> IResult<&[u8], Self> {
+        let (input, atomic_count) = nc::le_u32(input)?;
+        let (input, extra_counts) = cond(
+            version > 0x3_3000 && input.len() > 4,
+            tuple((nc::le_u32, nc::le_u32)),
+        )(input)?;
+        let (light_count, camera_count) = extra_counts.unwrap_or_default();
 
         Ok((
             input,
@@ -222,7 +228,7 @@ impl SectionData {
             SectionType::MaterialList => Self::parse_material_list(input)?,
             SectionType::FrameList => Self::parse_frame_list(input)?,
             SectionType::Geometry => Self::parse_geometry_data(input, version)?,
-            SectionType::Clump => Self::parse_clump_data(input)?,
+            SectionType::Clump => Self::parse_clump_data(input, version)?,
             SectionType::Atomic => Self::parse_atomic_data(input)?,
             SectionType::TextureDictionary => Self::parse_texture_dictionary(input, version)?,
             SectionType::GeometryList => Self::parse_geometry_list(input)?,

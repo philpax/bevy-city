@@ -36,14 +36,27 @@ impl Model {
         let geometry_data = geometry.data.as_ref().expect("no geometry data");
         let morph_target = &geometry.morph_targets[0];
 
+        let texture_set = if geometry_data.texture_sets.is_empty() {
+            vec![[0.0, 0.0]; morph_target.vertices.len()]
+        } else {
+            geometry_data.texture_sets[0]
+                .iter()
+                .map(|(u, v)| [*u, *v])
+                .collect()
+        };
+
+        let normals = if morph_target.normals.is_empty() {
+            vec![[0.0, 0.0, 0.0]; morph_target.vertices.len()]
+        } else {
+            morph_target.normals.iter().map(|n| n.as_array()).collect()
+        };
+
         let vertices: Vec<Vertex> = morph_target
             .vertices
             .iter()
-            .zip(morph_target.normals.iter())
-            .zip(geometry_data.texture_sets[0].iter())
-            .map(|((position, normal), (u, v))| {
-                Vertex::new(position.as_array(), normal.as_array(), [*u, *v])
-            })
+            .zip(normals.iter())
+            .zip(texture_set.iter())
+            .map(|((position, normal), uv)| Vertex::new(position.as_array(), *normal, *uv))
             .collect();
 
         let indices: Vec<u16> = geometry_data
