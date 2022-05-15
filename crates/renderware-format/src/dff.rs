@@ -66,7 +66,10 @@ impl Model {
             .collect();
 
         let topology = if geometry.format.contains(GeometryFormat::TRI_STRIP) {
-            Topology::TriangleStrip
+            // Topology::TriangleStrip
+            // hack(philpax): for some reason, we only get correct rendering with triangle list
+            // investigate properly at some point
+            Topology::TriangleList
         } else {
             Topology::TriangleList
         };
