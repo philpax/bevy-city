@@ -49,7 +49,14 @@ async fn load_dff<'a, 'b>(
         rwf::dff::Topology::TriangleList => PrimitiveTopology::TriangleList,
         rwf::dff::Topology::TriangleStrip => PrimitiveTopology::TriangleStrip,
     });
-    set_position_data(&mut mesh, vertices.iter().map(|v| v.position).collect());
+    set_position_data(
+        &mut mesh,
+        vertices
+            .iter()
+            .map(|v| v.position)
+            .map(|[x, y, z]| [x, z, y])
+            .collect(),
+    );
     set_normal_data(&mut mesh, vertices.iter().map(|v| v.normal).collect());
     set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
     mesh.set_indices(Some(Indices::U16(model.indices.clone())));
