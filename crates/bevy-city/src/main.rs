@@ -107,6 +107,10 @@ fn handle_ipl_events(
                 let ipl = assets.get(handle).unwrap();
 
                 for (name, [x, y, z]) in &ipl.instances {
+                    if name.len() > 3 && name[..3].eq_ignore_ascii_case("lod") {
+                        continue;
+                    }
+
                     let path = format!("models/gta3/{name}.dff");
                     let model_handle = asset_server.load(&path);
 
