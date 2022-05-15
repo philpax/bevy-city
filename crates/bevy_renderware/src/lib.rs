@@ -42,26 +42,32 @@ async fn load_dff<'a, 'b>(
     load_context: &'a mut LoadContext<'b>,
 ) -> Result<(), RwError> {
     let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
-    let model = rwf::dff::Model::from_raw(&raw).swap_remove(0);
-    let vertices = model.vertices;
+    let models = rwf::dff::Model::from_raw(&raw);
+    if let Some(model) = models
+        .iter()
+        .max_by(|x, y| x.indices.len().cmp(&y.indices.len()))
+    {
+        let vertices = &model.vertices;
 
-    let mut mesh = Mesh::new(match model.topology {
-        rwf::dff::Topology::TriangleList => PrimitiveTopology::TriangleList,
-        rwf::dff::Topology::TriangleStrip => PrimitiveTopology::TriangleStrip,
-    });
-    set_position_data(
-        &mut mesh,
-        vertices
-            .iter()
-            .map(|v| v.position)
+        let mut mesh = Mesh::new(match model.topology {
+            rwf::dff::Topology::TriangleList => PrimitiveTopology::TriangleList,
+            rwf::dff::Topology::TriangleStrip => PrimitiveTopology::TriangleStrip,
+        });
+        set_position_data(
+            &mut mesh,
+            vertices
+                .iter()
+                .map(|v| v.position)
                 .map(|[x, y, z]| [x, z, -y])
-            .collect(),
-    );
-    set_normal_data(&mut mesh, vertices.iter().map(|v| v.normal).collect());
-    set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
-    mesh.set_indices(Some(Indices::U16(model.indices.clone())));
+                .collect(),
+        );
+        set_normal_data(&mut mesh, vertices.iter().map(|v| v.normal).collect());
+        set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
+        mesh.set_indices(Some(Indices::U16(model.indices.clone())));
 
-    load_context.set_default_asset(LoadedAsset::new(mesh));
+        load_context.set_default_asset(LoadedAsset::new(mesh));
+    }
+
     Ok(())
 }
 
