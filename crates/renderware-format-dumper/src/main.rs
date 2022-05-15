@@ -34,10 +34,25 @@ fn print_section(section: &rwf::raw::Section, depth: i32) {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let file = rwf::raw::BinaryStreamFile::open(args.path)?;
-    match args.mode {
-        Mode::Raw => print_section(&file.sections[0], 0),
-        Mode::Processed => println!("{:?}", rwf::dff::Model::from_raw(&file)),
+    let paths = if args.path.is_dir() {
+        std::fs::read_dir(&args.path)?
+            .filter_map(Result::ok)
+            .map(|d| d.path())
+            .filter(|p| p.extension().unwrap_or_default() == "dff")
+            .collect()
+    } else {
+        vec![args.path]
+    };
+    for path in &paths {
+        if paths.len() > 1 {
+            println!("{:?}", path);
+        }
+
+        let file = rwf::raw::BinaryStreamFile::open(path)?;
+        match args.mode {
+            Mode::Raw => print_section(&file.sections[0], 0),
+            Mode::Processed => println!("{:?}", rwf::dff::Model::from_raw(&file)),
+        }
     }
     Ok(())
 }
