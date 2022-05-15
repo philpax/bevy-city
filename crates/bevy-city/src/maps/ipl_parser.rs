@@ -43,8 +43,8 @@ impl Ipl {
                     segments[1].to_string(),
                     [
                         segments[3].parse::<f32>().unwrap(),
-                        segments[4].parse::<f32>().unwrap(),
                         segments[5].parse::<f32>().unwrap(),
+                        -segments[4].parse::<f32>().unwrap(),
                     ],
                 )
             })

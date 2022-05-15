@@ -54,7 +54,7 @@ async fn load_dff<'a, 'b>(
         vertices
             .iter()
             .map(|v| v.position)
-            .map(|[x, y, z]| [x, z, y])
+                .map(|[x, y, z]| [x, z, -y])
             .collect(),
     );
     set_normal_data(&mut mesh, vertices.iter().map(|v| v.normal).collect());

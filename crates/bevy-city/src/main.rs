@@ -117,7 +117,7 @@ fn handle_ipl_events(
                             unlit: true,
                             ..default()
                         }),
-                        transform: Transform::from_xyz(*x, *z, *y),
+                        transform: Transform::from_xyz(*x, *y, *z),
                         ..default()
                     });
                 }
