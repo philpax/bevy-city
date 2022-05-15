@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.57"
 bevy = "0.7"
+bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git", version = "0.1.0" }
 bevy_renderware = { path = "../bevy_renderware" }
