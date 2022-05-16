@@ -2,6 +2,7 @@
 members = [
     "crates/bevy-city",
     "crates/renderware-format",
+    "crates/renderware-format-converter",
     "crates/renderware-format-dumper",
     "crates/bevy_renderware",
 ]

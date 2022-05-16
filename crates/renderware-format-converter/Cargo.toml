@@ -1,0 +1,10 @@
+[package]
+name = "renderware-format-converter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.57"
+clap = { version = "3.1.18", features = ["derive"] }
+image = "0.24.2"
+renderware-format = { path = "../renderware-format" }
