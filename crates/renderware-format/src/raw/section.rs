@@ -31,17 +31,7 @@ impl Section {
             SectionType::Struct => ClumpData::parse_struct(data, parent_type.unwrap(), version)?,
             SectionType::String => ClumpData::parse_string(data)?,
             SectionType::NodeName => ClumpData::parse_node_name(data)?,
-            SectionType::Clump
-            | SectionType::GeometryList
-            | SectionType::FrameList
-            | SectionType::MaterialList
-            | SectionType::Extension
-            | SectionType::Material
-            | SectionType::Texture
-            | SectionType::Geometry
-            | SectionType::Atomic
-            | SectionType::Raster
-            | SectionType::TextureDictionary => (data, ClumpData::Unknown),
+            _ if ClumpData::SUPPORTED_TYPES.contains(&section_type) => (data, ClumpData::Unknown),
             _ => (&[] as &[u8], ClumpData::Unknown),
         };
 

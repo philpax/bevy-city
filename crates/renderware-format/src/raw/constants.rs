@@ -221,3 +221,109 @@ pub enum TextureAddressing {
     Clamp = 3,
     Border = 4,
 }
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum RasterFormatScheme {
+    // 1 bit alpha, RGB 5 bits each; also used for DXT1 with alpha
+    _1555,
+    // 5 bits red, 6 bits green, 5 bits blue; also used for DXT1 without alpha
+    _565,
+    // RGBA 4 bits each; also used for DXT3
+    _4444,
+    // gray scale, D3DFMT_L8
+    LUM8,
+    // RGBA 8 bits each
+    _8888,
+    // RGB 8 bits each, D3DFMT_X8R8G8B8
+    _888,
+    // RGB 5 bits each - rare, use 565 instead, D3DFMT_X1R5G5B5
+    _555,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub struct RasterFormat(u32);
+impl RasterFormat {
+    // 1 bit alpha, RGB 5 bits each; also used for DXT1 with alpha
+    const _1555: u32 = 0x0100;
+    // 5 bits red, 6 bits green, 5 bits blue; also used for DXT1 without alpha
+    const _565: u32 = 0x0200;
+    // RGBA 4 bits each; also used for DXT3
+    const _4444: u32 = 0x0300;
+    // gray scale, D3DFMT_L8
+    const LUM8: u32 = 0x0400;
+    // RGBA 8 bits each
+    const _8888: u32 = 0x0500;
+    // RGB 8 bits each, D3DFMT_X8R8G8B8
+    const _888: u32 = 0x0600;
+    // RGB 5 bits each - rare, use 565 instead, D3DFMT_X1R5G5B5
+    const _555: u32 = 0x0A00;
+    #[cfg(feature = "san_andreas_support")]
+    // RW generates mipmaps, see special section below
+    const EXT_AUTO_MIPMAP: u32 = 0x1000;
+    // 2^8 = 256 palette colors
+    const EXT_PAL8: u32 = 0x2000;
+    // 2^4 = 16 palette colors
+    const EXT_PAL4: u32 = 0x4000;
+    #[cfg(feature = "san_andreas_support")]
+    // mipmaps included
+    const EXT_MIPMAP: u32 = 0x8000;
+
+    pub fn new(bits: u32) -> RasterFormat {
+        Self(bits)
+    }
+
+    pub fn scheme(&self) -> RasterFormatScheme {
+        if (self.0 & Self::_1555) != 0 {
+            RasterFormatScheme::_1555
+        } else if (self.0 & Self::_565) != 0 {
+            RasterFormatScheme::_565
+        } else if (self.0 & Self::_4444) != 0 {
+            RasterFormatScheme::_4444
+        } else if (self.0 & Self::LUM8) != 0 {
+            RasterFormatScheme::LUM8
+        } else if (self.0 & Self::_8888) != 0 {
+            RasterFormatScheme::_8888
+        } else if (self.0 & Self::_888) != 0 {
+            RasterFormatScheme::_888
+        } else if (self.0 & Self::_555) != 0 {
+            RasterFormatScheme::_555
+        } else {
+            panic!("unexpected scheme")
+        }
+    }
+
+    #[cfg(feature = "san_andreas_support")]
+    pub fn auto_mipmap(&self) -> bool {
+        (self.0 | Self::EXT_AUTO_MIPMAP) != 0
+    }
+
+    #[cfg(feature = "san_andreas_support")]
+    pub fn mipmap_included(&self) -> bool {
+        (self.0 | Self::EXT_MIPMAP) != 0
+    }
+
+    pub fn palette_color_count(&self) -> u16 {
+        if (self.0 & Self::EXT_PAL8) != 0 {
+            256
+        } else if (self.0 & Self::EXT_PAL4) != 0 {
+            16
+        } else {
+            0
+        }
+    }
+}
+impl std::fmt::Debug for RasterFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("RasterFormat");
+        ds.field("scheme", &self.scheme())
+            .field("palette_color_count", &self.palette_color_count());
+
+        #[cfg(feature = "san_andreas_support")]
+        {
+            ds.field("auto_mipmap", &self.auto_mipmap())
+                .field("mipmap_included", &self.mipmap_included())
+        }
+
+        ds.finish()
+    }
+}

@@ -1,12 +1,14 @@
-use nom::{combinator::cond, number::complete as nc, sequence::tuple, IResult};
+use nom::{
+    bits::complete as bic, combinator::cond, number::complete as nc, sequence::tuple, IResult,
+};
+use num_traits::FromPrimitive;
 
 use super::{constants::*, Color, Frame, GeometryData, Lighting, MorphTarget, UnparsedData};
 
 #[derive(Debug, PartialEq)]
 pub struct Texture {
     pub filtering: TextureFiltering,
-    pub u: TextureAddressing,
-    pub v: TextureAddressing,
+    pub uv: (TextureAddressing, TextureAddressing),
     pub mipmaps_used: bool,
 }
 
@@ -41,6 +43,27 @@ pub struct Atomic {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Raster {
+    pub filtering: TextureFiltering,
+    pub uv: (TextureAddressing, TextureAddressing),
+
+    pub name: String,
+    pub mask_name: String,
+
+    pub raster_format: RasterFormat,
+    pub has_alpha: bool,
+
+    pub width: u16,
+    pub height: u16,
+    pub depth: u8,
+    pub level_count: u8,
+    pub raster_type: u8,
+    pub compression: u8,
+
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct TextureDictionary {
     pub texture_count: u32,
     pub device_id: Option<u16>,
@@ -57,6 +80,7 @@ pub enum ClumpData {
     Geometry(Geometry),
     Clump(Clump),
     Atomic(Atomic),
+    Raster(Raster),
     TextureDictionary(TextureDictionary),
     GeometryList { geometry_count: u32 },
     NodeName(String),
@@ -64,28 +88,28 @@ pub enum ClumpData {
 }
 impl ClumpData {
     fn parse_texture(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, filtering) = nom::combinator::map(nc::le_u8, |v| {
-            num_traits::FromPrimitive::from_u8(v).unwrap()
-        })(input)?;
+        let (input, filtering) =
+            nom::combinator::map(nc::le_u8, |v| FromPrimitive::from_u8(v).unwrap())(input)?;
 
         let (input, (u, v, mipmaps_used, _padding)): (_, (_, _, u8, u16)) =
             nom::bits::bits::<_, _, nom::error::Error<(&[u8], usize)>, _, _>(tuple((
-                nom::bits::complete::take(4usize),
-                nom::bits::complete::take(4usize),
-                nom::bits::complete::take(1usize),
-                nom::bits::complete::take(15usize),
+                bic::take(4usize),
+                bic::take(4usize),
+                bic::take(1usize),
+                bic::take(15usize),
             )))(input)?;
 
-        let u = num_traits::FromPrimitive::from_u8(u).unwrap();
-        let v = num_traits::FromPrimitive::from_u8(v).unwrap();
+        let uv = (
+            FromPrimitive::from_u8(u).unwrap(),
+            FromPrimitive::from_u8(v).unwrap(),
+        );
         let mipmaps_used = mipmaps_used > 0;
 
         Ok((
             input,
             ClumpData::Texture(Texture {
                 filtering,
-                u,
-                v,
+                uv,
                 mipmaps_used,
             }),
         ))
@@ -120,7 +144,7 @@ impl ClumpData {
         Ok((input, ClumpData::FrameList(frames)))
     }
 
-    fn parse_geometry_data(input: &[u8], version: u32) -> IResult<&[u8], Self> {
+    fn parse_geometry(input: &[u8], version: u32) -> IResult<&[u8], Self> {
         let (input, (format, triangle_count, vertices_count, morph_target_count)) =
             tuple((nc::le_u32, nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
 
@@ -155,7 +179,7 @@ impl ClumpData {
         ))
     }
 
-    fn parse_clump_data(input: &[u8], version: u32) -> IResult<&[u8], Self> {
+    fn parse_clump(input: &[u8], version: u32) -> IResult<&[u8], Self> {
         let (input, atomic_count) = nc::le_u32(input)?;
         let (input, extra_counts) = cond(
             version > 0x3_3000 && input.len() > 4,
@@ -173,7 +197,7 @@ impl ClumpData {
         ))
     }
 
-    fn parse_atomic_data(input: &[u8]) -> IResult<&[u8], Self> {
+    fn parse_atomic(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (frame_index, geometry_index, flags, _unused)) =
             tuple((nc::le_u32, nc::le_u32, nc::le_u32, nc::le_u32))(input)?;
 
@@ -188,6 +212,68 @@ impl ClumpData {
                 frame_index,
                 geometry_index,
                 render,
+            }),
+        ))
+    }
+
+    fn parse_raster(input: &[u8]) -> IResult<&[u8], Self> {
+        let (input, platform_id) = nc::le_u32(input)?;
+        // We don't support anything else right now
+        assert_eq!(platform_id, 8);
+
+        let (input, (filtering, u, v, _padding)): (_, (_, _, u8, u16)) =
+            nom::bits::bits::<_, _, nom::error::Error<(&[u8], usize)>, _, _>(tuple((
+                bic::take(8usize),
+                bic::take(4usize),
+                bic::take(4usize),
+                bic::take(16usize),
+            )))(input)?;
+        let filtering = FromPrimitive::from_u8(filtering).unwrap();
+        let uv = (
+            FromPrimitive::from_u8(u).unwrap(),
+            FromPrimitive::from_u8(v).unwrap(),
+        );
+
+        let (input, name) = parse_null_terminated_ascii(input, 32)?;
+        let (input, mask_name) = parse_null_terminated_ascii(input, 32)?;
+
+        let (input, raster_format) = nc::le_u32(input)?;
+        let raster_format = RasterFormat::new(raster_format);
+
+        let (input, has_alpha) = nc::le_u32(input)?;
+        let has_alpha = has_alpha > 0;
+
+        let (input, width) = nc::le_u16(input)?;
+        let (input, height) = nc::le_u16(input)?;
+        let (input, depth) = nc::le_u8(input)?;
+        let (input, level_count) = nc::le_u8(input)?;
+        let (input, raster_type) = nc::le_u8(input)?;
+        let (input, compression) = nc::le_u8(input)?;
+
+        let (input, raster_size) = nc::le_u32(input)?;
+        let (input, raster_data) = nom::bytes::complete::take(raster_size)(input)?;
+
+        let data = raster_data.to_vec();
+        Ok((
+            input,
+            ClumpData::Raster(Raster {
+                filtering,
+                uv,
+
+                name,
+                mask_name,
+
+                raster_format,
+                has_alpha,
+
+                width,
+                height,
+                depth,
+                level_count,
+                raster_type,
+                compression,
+
+                data,
             }),
         ))
     }
@@ -219,6 +305,18 @@ impl ClumpData {
         Ok((input, ClumpData::GeometryList { geometry_count }))
     }
 
+    pub(crate) const SUPPORTED_TYPES: &'static [SectionType] = &[
+        SectionType::Texture,
+        SectionType::Material,
+        SectionType::MaterialList,
+        SectionType::FrameList,
+        SectionType::Geometry,
+        SectionType::Clump,
+        SectionType::Atomic,
+        SectionType::Raster,
+        SectionType::TextureDictionary,
+        SectionType::GeometryList,
+    ];
     pub(crate) fn parse_struct(
         input: &[u8],
         parent_type: SectionType,
@@ -229,9 +327,10 @@ impl ClumpData {
             SectionType::Material => Self::parse_material(input, version)?,
             SectionType::MaterialList => Self::parse_material_list(input)?,
             SectionType::FrameList => Self::parse_frame_list(input)?,
-            SectionType::Geometry => Self::parse_geometry_data(input, version)?,
-            SectionType::Clump => Self::parse_clump_data(input, version)?,
-            SectionType::Atomic => Self::parse_atomic_data(input)?,
+            SectionType::Geometry => Self::parse_geometry(input, version)?,
+            SectionType::Clump => Self::parse_clump(input, version)?,
+            SectionType::Atomic => Self::parse_atomic(input)?,
+            SectionType::Raster => Self::parse_raster(input)?,
             SectionType::TextureDictionary => Self::parse_texture_dictionary(input, version)?,
             SectionType::GeometryList => Self::parse_geometry_list(input)?,
             _ => (&[], ClumpData::Struct(super::UnparsedData(input.to_vec()))),
@@ -239,14 +338,7 @@ impl ClumpData {
     }
 
     pub(crate) fn parse_string(input: &[u8]) -> IResult<&[u8], Self> {
-        Ok((
-            &[],
-            ClumpData::String(
-                String::from_utf8_lossy(input)
-                    .trim_end_matches(char::from(0))
-                    .to_string(),
-            ),
-        ))
+        Ok((&[], ClumpData::String(null_terminated_ascii(input))))
     }
 
     pub(crate) fn parse_node_name(input: &[u8]) -> IResult<&[u8], Self> {
@@ -255,4 +347,15 @@ impl ClumpData {
             ClumpData::NodeName(String::from_utf8_lossy(input).to_string()),
         ))
     }
+}
+
+fn null_terminated_ascii(input: &[u8]) -> String {
+    String::from_utf8_lossy(input)
+        .trim_end_matches(char::from(0))
+        .to_string()
+}
+
+fn parse_null_terminated_ascii(input: &[u8], length: usize) -> IResult<&[u8], String> {
+    let (input, str) = nom::bytes::complete::take(length)(input)?;
+    Ok((input, null_terminated_ascii(str)))
 }
