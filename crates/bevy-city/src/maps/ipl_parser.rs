@@ -17,7 +17,7 @@ impl Ipl {
         let mut current_section = None;
         let mut sections: HashMap<&str, Vec<&str>> = HashMap::new();
         for line in data.lines() {
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -38,7 +38,7 @@ impl Ipl {
             .expect("no inst")
             .iter()
             .map(|line| {
-                let segments: Vec<_> = line.split(",").map(|s| s.trim()).collect();
+                let segments: Vec<_> = line.split(',').map(|s| s.trim()).collect();
                 (
                     segments[1].to_string(),
                     [

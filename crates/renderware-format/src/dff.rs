@@ -1,7 +1,4 @@
-use crate::raw::{
-    constants::{GeometryFormat, SectionType},
-    Atomic, BinaryStreamFile, ClumpData, Frame, Section,
-};
+use crate::raw::{constants::SectionType, Atomic, BinaryStreamFile, ClumpData, Frame, Section};
 
 pub use crate::raw::{Mat3, Vec3};
 
@@ -81,11 +78,12 @@ impl Model {
             .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
             .collect();
 
-        let topology = if geometry.format.contains(GeometryFormat::TRI_STRIP) {
-            // Topology::TriangleStrip
-            // hack(philpax): for some reason, we only get correct rendering with triangle list
-            // investigate properly at some point
-            Topology::TriangleList
+        // hack(philpax): for some reason, we only get correct rendering with triangle list
+        // investigate properly at some point
+        // let is_tri_strip = geometry.format.contains(GeometryFormat::TRI_STRIP);
+        let is_tri_strip = false;
+        let topology = if is_tri_strip {
+            Topology::TriangleStrip
         } else {
             Topology::TriangleList
         };
@@ -103,7 +101,7 @@ impl Model {
     pub fn from_raw(raw: &BinaryStreamFile) -> Vec<(Transform, Model)> {
         let clump = &raw.sections[0];
 
-        let atomics: Vec<_> = clump
+        let atomics = clump
             .find_children_by_type(SectionType::Atomic)
             .filter_map(|s| match s.children[0].data {
                 ClumpData::Atomic(Atomic {
@@ -112,8 +110,7 @@ impl Model {
                     render,
                 }) if render => Some((frame_index as usize, geometry_index as usize)),
                 _ => None,
-            })
-            .collect();
+            });
 
         let frames = match &clump
             .find_child_by_type(SectionType::FrameList)
@@ -142,7 +139,6 @@ impl Model {
         assert_eq!(geometry_count as usize, geometries.len());
 
         atomics
-            .into_iter()
             .map(|(frame_index, geometry_index)| (&frames[frame_index], geometries[geometry_index]))
             .map(|(frame, geometry)| (frame.into(), Model::from_geometry(geometry)))
             .collect()
