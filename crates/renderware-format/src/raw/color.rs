@@ -1,6 +1,6 @@
 use nom::{number::complete as nc, sequence::tuple, IResult};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,

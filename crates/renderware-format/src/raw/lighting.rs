@@ -1,6 +1,6 @@
 use nom::{number::complete as nc, sequence::tuple, IResult};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Lighting {
     pub ambient: f32,
     pub specular: f32,

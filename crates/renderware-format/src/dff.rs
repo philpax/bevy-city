@@ -1,6 +1,9 @@
 use crate::raw::{constants::SectionType, Atomic, BinaryStreamFile, ClumpData, Frame, Section};
 
-pub use crate::raw::{Mat3, Vec3};
+pub use crate::raw::{
+    constants::{TextureAddressing, TextureFiltering},
+    Color, Lighting, Mat3, Vec3,
+};
 
 #[derive(Debug)]
 pub struct Transform {
@@ -39,13 +42,33 @@ pub enum Topology {
 }
 
 #[derive(Debug)]
+pub struct Texture {
+    pub filtering: TextureFiltering,
+    pub uv: (TextureAddressing, TextureAddressing),
+    pub name: String,
+    pub alpha_name: String,
+}
+
+#[derive(Debug)]
+pub struct Material {
+    pub color: Color,
+    pub is_textured: bool,
+    pub lighting: Option<Lighting>,
+    pub texture: Texture,
+}
+
+#[derive(Debug)]
 pub struct Model {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u16>,
     pub topology: Topology,
+    pub materials: Vec<Material>,
 }
 impl Model {
-    fn from_geometry(geometry: &crate::raw::Geometry) -> Model {
+    fn from_geometry(
+        geometry: &crate::raw::Geometry,
+        material_list: Option<&crate::raw::Section>,
+    ) -> Model {
         let geometry_data = geometry.data.as_ref().expect("no geometry data");
         let morph_target = &geometry.morph_targets[0];
 
@@ -88,10 +111,51 @@ impl Model {
             Topology::TriangleList
         };
 
+        let materials = if let Some(material_list) = material_list {
+            material_list
+                .find_children_by_type(SectionType::Material)
+                .filter_map(|material| {
+                    let material_data = match material.get_child_struct_data()? {
+                        ClumpData::Material(m) => m,
+                        _ => return None,
+                    };
+
+                    let texture = material.find_child_by_type(SectionType::Texture)?;
+                    let texture_data = match texture.get_child_struct_data()? {
+                        ClumpData::Texture(t) => t,
+                        _ => return None,
+                    };
+
+                    let names: Vec<&String> = texture
+                        .find_children_by_type(SectionType::String)
+                        .filter_map(|s| match &s.data {
+                            ClumpData::String(s) => Some(s),
+                            _ => None,
+                        })
+                        .collect();
+
+                    Some(Material {
+                        color: material_data.color,
+                        is_textured: material_data.is_textured,
+                        lighting: material_data.lighting,
+                        texture: Texture {
+                            filtering: texture_data.filtering,
+                            uv: texture_data.uv,
+                            name: names[0].to_string(),
+                            alpha_name: names[1].to_string(),
+                        },
+                    })
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
         Model {
             vertices,
             indices,
             topology,
+            materials,
         }
     }
 }
@@ -131,16 +195,23 @@ impl Model {
 
         let geometries: Vec<_> = geometry_list
             .find_children_by_type(SectionType::Geometry)
-            .map(|s| match s.get_child_struct_data() {
-                Some(ClumpData::Geometry(geometry)) => geometry,
-                _ => panic!("no geometry data"),
+            .map(|s| {
+                (
+                    match s.get_child_struct_data() {
+                        Some(ClumpData::Geometry(geometry)) => geometry,
+                        _ => panic!("no geometry data"),
+                    },
+                    s.find_child_by_type(SectionType::MaterialList),
+                )
             })
             .collect();
         assert_eq!(geometry_count as usize, geometries.len());
 
         atomics
             .map(|(frame_index, geometry_index)| (&frames[frame_index], geometries[geometry_index]))
-            .map(|(frame, geometry)| (frame.into(), Model::from_geometry(geometry)))
+            .map(|(frame, (geometry, material_list))| {
+                (frame.into(), Model::from_geometry(geometry, material_list))
+            })
             .collect()
     }
 }
