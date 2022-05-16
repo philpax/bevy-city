@@ -1,6 +1,6 @@
 use crate::raw::{
     constants::{GeometryFormat, SectionType},
-    Atomic, BinaryStreamFile, Frame, Section, SectionData,
+    Atomic, BinaryStreamFile, ClumpData, Frame, Section,
 };
 
 pub use crate::raw::{Mat3, Vec3};
@@ -106,7 +106,7 @@ impl Model {
         let atomics: Vec<_> = clump
             .find_children_by_type(SectionType::Atomic)
             .filter_map(|s| match s.children[0].data {
-                SectionData::Atomic(Atomic {
+                ClumpData::Atomic(Atomic {
                     frame_index,
                     geometry_index,
                     render,
@@ -119,7 +119,7 @@ impl Model {
             .find_child_by_type(SectionType::FrameList)
             .and_then(Section::get_child_struct_data)
         {
-            Some(SectionData::FrameList(v)) => &v[..],
+            Some(ClumpData::FrameList(v)) => &v[..],
             _ => panic!("no frame list data"),
         };
 
@@ -128,14 +128,14 @@ impl Model {
             .expect("failed to find geometry list");
 
         let geometry_count = match geometry_list.get_child_struct_data() {
-            Some(SectionData::GeometryList { geometry_count }) => *geometry_count,
+            Some(ClumpData::GeometryList { geometry_count }) => *geometry_count,
             _ => panic!("no geometry list struct"),
         };
 
         let geometries: Vec<_> = geometry_list
             .find_children_by_type(SectionType::Geometry)
             .map(|s| match s.get_child_struct_data() {
-                Some(SectionData::Geometry(geometry)) => geometry,
+                Some(ClumpData::Geometry(geometry)) => geometry,
                 _ => panic!("no geometry data"),
             })
             .collect();

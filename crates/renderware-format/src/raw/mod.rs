@@ -30,6 +30,9 @@ pub use geometry_data::*;
 pub mod morph_target;
 pub use morph_target::*;
 
+pub mod clump_data;
+pub use clump_data::*;
+
 pub mod section;
 pub use section::*;
 
