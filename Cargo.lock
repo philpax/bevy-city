@@ -238,6 +238,7 @@ dependencies = [
  "bevy",
  "bevy_editor_pls",
  "bevy_renderware",
+ "clap",
 ]
 
 [[package]]

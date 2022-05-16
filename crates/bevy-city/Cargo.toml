@@ -8,3 +8,4 @@ anyhow = "1.0.57"
 bevy = "0.7"
 bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git", version = "0.1.0" }
 bevy_renderware = { path = "../bevy_renderware" }
+clap = { version = "3.1.18", features = ["derive"] }

@@ -1,29 +1,53 @@
+use std::path::PathBuf;
+
 use bevy::prelude::*;
 use bevy_editor_pls::prelude::*;
-use maps::ipl_parser::Ipl;
+
+use clap::Parser;
 
 pub mod maps;
+use maps::ipl_parser::Ipl;
 
-fn main() {
-    App::new()
-        .insert_resource(Msaa { samples: 4 })
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Cli {
+    /// If provided, render this asset by itself
+    #[clap(short, long)]
+    path: Option<PathBuf>,
+}
+
+struct DesiredAssetRenderPath(PathBuf);
+
+fn main() -> anyhow::Result<()> {
+    let args = Cli::parse();
+
+    let mut app = App::new();
+    app.insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy_renderware::RwPlugin)
         .add_plugin(maps::ipl_parser::IplPlugin)
-        .add_plugin(EditorPlugin)
-        .add_startup_system(load_uzi)
-        // .add_startup_system(load_maps)
-        .add_system(handle_ipl_events)
-        .run();
+        .add_plugin(EditorPlugin);
+
+    if let Some(path) = args.path {
+        let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
+        app.insert_resource(path).add_startup_system(asset_viewer);
+    } else {
+        app.add_startup_system(load_maps);
+    };
+
+    app.add_system(handle_ipl_events).run();
+
+    Ok(())
 }
 
-fn load_uzi(
+fn asset_viewer(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    desired_asset_render_path: Res<DesiredAssetRenderPath>,
 ) {
     commands.spawn_bundle(PbrBundle {
-        mesh: asset_server.load("models/gta3/uzi.dff"),
+        mesh: asset_server.load(desired_asset_render_path.0.as_path()),
         material: materials.add(Color::WHITE.into()),
         transform: Transform::from_xyz(0.0, 0.5, 0.0),
         ..default()
@@ -97,8 +121,8 @@ fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn handle_ipl_events(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
     mut ev_asset: EventReader<AssetEvent<Ipl>>,
+    asset_server: Res<AssetServer>,
     assets: Res<Assets<Ipl>>,
 ) {
     for ev in ev_asset.iter() {
