@@ -10,6 +10,7 @@ use anyhow::Result;
 use thiserror::Error;
 
 use renderware_format as rwf;
+use rwf::dff::Vec3;
 
 #[derive(Default)]
 pub struct DffLoader;
@@ -43,9 +44,9 @@ async fn load_dff<'a, 'b>(
 ) -> Result<(), RwError> {
     let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
     let models = rwf::dff::Model::from_raw(&raw);
-    if let Some(model) = models
+    if let Some((_transform, model)) = models
         .iter()
-        .max_by(|x, y| x.indices.len().cmp(&y.indices.len()))
+        .max_by(|(_, x), (_, y)| x.indices.len().cmp(&y.indices.len()))
     {
         let vertices = &model.vertices;
 
@@ -58,10 +59,13 @@ async fn load_dff<'a, 'b>(
             vertices
                 .iter()
                 .map(|v| v.position)
-                .map(|[x, y, z]| [x, z, -y])
+                .map(|Vec3 { x, y, z }| [x, z, -y])
                 .collect(),
         );
-        set_normal_data(&mut mesh, vertices.iter().map(|v| v.normal).collect());
+        set_normal_data(
+            &mut mesh,
+            vertices.iter().map(|v| v.normal.as_array()).collect(),
+        );
         set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
         mesh.set_indices(Some(Indices::U16(model.indices.clone())));
 

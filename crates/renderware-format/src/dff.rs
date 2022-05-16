@@ -1,16 +1,32 @@
 use crate::raw::{
     constants::{GeometryFormat, SectionType},
-    Atomic, BinaryStreamFile, Section, SectionData,
+    Atomic, BinaryStreamFile, Frame, Section, SectionData,
 };
+
+pub use crate::raw::{Mat3, Vec3};
+
+#[derive(Debug)]
+pub struct Transform {
+    pub rotation: Mat3,
+    pub translation: Vec3,
+}
+impl From<&Frame> for Transform {
+    fn from(frame: &Frame) -> Self {
+        Self {
+            rotation: frame.rotation,
+            translation: frame.translation,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
+    pub position: Vec3,
+    pub normal: Vec3,
     pub uv: [f32; 2],
 }
 impl Vertex {
-    pub fn new(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Self {
+    pub fn new(position: Vec3, normal: Vec3, uv: [f32; 2]) -> Self {
         Self {
             position,
             normal,
@@ -46,9 +62,9 @@ impl Model {
         };
 
         let normals = if morph_target.normals.is_empty() {
-            vec![[0.0, 0.0, 0.0]; morph_target.vertices.len()]
+            vec![Vec3::ZERO; morph_target.vertices.len()]
         } else {
-            morph_target.normals.iter().map(|n| n.as_array()).collect()
+            morph_target.normals.clone()
         };
 
         let vertices: Vec<Vertex> = morph_target
@@ -56,7 +72,7 @@ impl Model {
             .iter()
             .zip(normals.iter())
             .zip(texture_set.iter())
-            .map(|((position, normal), uv)| Vertex::new(position.as_array(), *normal, *uv))
+            .map(|((position, normal), uv)| Vertex::new(*position, *normal, *uv))
             .collect();
 
         let indices: Vec<u16> = geometry_data
@@ -84,7 +100,7 @@ impl Model {
 
 impl Model {
     // todo: replace all the panics with errors
-    pub fn from_raw(raw: &BinaryStreamFile) -> Vec<Model> {
+    pub fn from_raw(raw: &BinaryStreamFile) -> Vec<(Transform, Model)> {
         let clump = &raw.sections[0];
 
         let atomics: Vec<_> = clump
@@ -128,7 +144,7 @@ impl Model {
         atomics
             .into_iter()
             .map(|(frame_index, geometry_index)| (&frames[frame_index], geometries[geometry_index]))
-            .map(|(_frame, geometry)| Model::from_geometry(geometry))
+            .map(|(frame, geometry)| (frame.into(), Model::from_geometry(geometry)))
             .collect()
     }
 }
