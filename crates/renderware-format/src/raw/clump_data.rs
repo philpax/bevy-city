@@ -252,8 +252,11 @@ impl ClumpData {
 
         let (input, raster_size) = nc::le_u32(input)?;
         let (input, raster_data) = nom::bytes::complete::take(raster_size)(input)?;
-
         let data = raster_data.to_vec();
+
+        // hack(philpax): assume that the input is exhausted, we don't care for the mipmaps
+        let input = &input[0..0];
+
         Ok((
             input,
             ClumpData::Raster(Raster {
