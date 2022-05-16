@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bevy_app = "0.7"
 bevy_asset = "0.7"
+bevy_reflect = "0.7"
 bevy_render = "0.7"
 bevy_utils = "0.7"
 

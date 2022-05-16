@@ -40,13 +40,11 @@ fn main() -> anyhow::Result<()> {
 
     let textures = rwf::txd::Texture::from_raw(&rwf::raw::BinaryStreamFile::open(&args.path)?);
     for texture in &textures {
-        let buffer: Vec<u8> = texture.data.iter().flat_map(|c| c.as_array()).collect();
-
         image::save_buffer(
             args.output_directory
                 .join(&texture.name)
                 .with_extension(extension),
-            &buffer,
+            &texture.data,
             texture.width as u32,
             texture.height as u32,
             image::ColorType::Rgba8,

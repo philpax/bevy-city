@@ -19,7 +19,7 @@ impl From<&Frame> for Transform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
@@ -35,13 +35,13 @@ impl Vertex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Topology {
     TriangleList,
     TriangleStrip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Texture {
     pub filtering: TextureFiltering,
     pub uv: (TextureAddressing, TextureAddressing),
@@ -49,7 +49,7 @@ pub struct Texture {
     pub alpha_name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Material {
     pub color: Color,
     pub is_textured: bool,
@@ -57,7 +57,7 @@ pub struct Material {
     pub texture: Texture,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u16>,

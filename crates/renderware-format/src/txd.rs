@@ -16,7 +16,7 @@ pub struct Texture {
     pub width: u16,
     pub height: u16,
 
-    pub data: Vec<Color>,
+    pub data: Vec<u8>,
 }
 
 impl Texture {
@@ -42,9 +42,15 @@ impl Texture {
             })
             .collect()
     }
+
+    pub fn as_colors(&self) -> impl Iterator<Item = Color> + '_ {
+        self.data
+            .chunks_exact(4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+    }
 }
 
-fn decompress_dxt(data: &[u8], width: usize, height: usize, compression: u8) -> Vec<Color> {
+fn decompress_dxt(data: &[u8], width: usize, height: usize, compression: u8) -> Vec<u8> {
     let mut uncompressed = vec![0u8; width * height * 4];
     match compression {
         1 => {
@@ -57,7 +63,4 @@ fn decompress_dxt(data: &[u8], width: usize, height: usize, compression: u8) -> 
     }
 
     uncompressed
-        .chunks_exact(4)
-        .map(|c| Color::new(c[0], c[1], c[2], c[3]))
-        .collect()
 }

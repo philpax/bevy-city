@@ -751,6 +751,7 @@ dependencies = [
  "anyhow",
  "bevy_app",
  "bevy_asset",
+ "bevy_reflect",
  "bevy_render",
  "bevy_utils",
  "renderware-format",

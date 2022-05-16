@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use bevy_editor_pls::prelude::*;
 
+use bevy_renderware::dff::Dff;
 use clap::Parser;
 
 pub mod maps;
@@ -17,6 +18,7 @@ struct Cli {
 }
 
 struct DesiredAssetRenderPath(PathBuf);
+struct DesiredAssetMeshes(Vec<(Handle<Dff>, Transform, bool)>);
 
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
@@ -26,32 +28,34 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy_renderware::RwPlugin)
         .add_plugin(maps::ipl_parser::IplPlugin)
-        .add_plugin(EditorPlugin);
+        .add_plugin(EditorPlugin)
+        .insert_resource(DesiredAssetMeshes(vec![]));
 
     if let Some(path) = args.path {
-        let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
-        app.insert_resource(path).add_startup_system(asset_viewer);
+        app.insert_resource(DesiredAssetRenderPath(path.strip_prefix("assets/")?.into()))
+            .add_startup_system(asset_viewer);
     } else {
         app.add_startup_system(load_maps);
     };
 
-    app.add_system(handle_ipl_events).run();
+    app.add_system(process_pending_desired_meshes)
+        .add_system(handle_ipl_events)
+        .run();
 
     Ok(())
 }
 
 fn asset_viewer(
     mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
     asset_server: Res<AssetServer>,
     desired_asset_render_path: Res<DesiredAssetRenderPath>,
 ) {
-    commands.spawn_bundle(PbrBundle {
-        mesh: asset_server.load(desired_asset_render_path.0.as_path()),
-        material: materials.add(Color::WHITE.into()),
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-        ..default()
-    });
+    desired_asset_meshes.0.push((
+        asset_server.load(desired_asset_render_path.0.as_path()),
+        Transform::from_xyz(0.0, 0.5, 0.0),
+        false,
+    ));
 
     commands.spawn_bundle(PointLightBundle {
         point_light: PointLight {
@@ -68,6 +72,45 @@ fn asset_viewer(
             .looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
         ..default()
     });
+}
+
+fn process_pending_desired_meshes(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
+    asset_server: Res<AssetServer>,
+    asset_meshes: Res<Assets<Dff>>,
+) {
+    for (handle, transform, spawned) in &mut desired_asset_meshes.0 {
+        if *spawned {
+            continue;
+        }
+
+        if let Some(dff) = asset_meshes.get(handle.clone()) {
+            let mesh = meshes.add(dff.mesh.clone());
+            let dff_material = dff.materials.get(0);
+            let asset_path = dff.asset_paths.get(0);
+
+            let base_color = dff_material
+                .map(|m| Color::rgba_u8(m.color.r, m.color.g, m.color.b, m.color.a))
+                .unwrap_or(Color::WHITE);
+            let base_color_texture = asset_path.map(|ap| asset_server.load(ap.clone()));
+
+            commands.spawn_bundle(PbrBundle {
+                mesh,
+                material: materials.add(StandardMaterial {
+                    base_color,
+                    base_color_texture,
+                    unlit: true,
+                    ..default()
+                }),
+                transform: transform.clone(),
+                ..default()
+            });
+            *spawned = true;
+        }
+    }
 }
 
 fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -119,9 +162,8 @@ fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn handle_ipl_events(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut ev_asset: EventReader<AssetEvent<Ipl>>,
+    mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
     asset_server: Res<AssetServer>,
     assets: Res<Assets<Ipl>>,
 ) {
@@ -138,16 +180,11 @@ fn handle_ipl_events(
                     let path = format!("models/gta3/{name}.dff");
                     let model_handle = asset_server.load(&path);
 
-                    commands.spawn_bundle(PbrBundle {
-                        mesh: model_handle,
-                        material: materials.add(StandardMaterial {
-                            base_color: Color::WHITE,
-                            unlit: true,
-                            ..default()
-                        }),
-                        transform: Transform::from_xyz(*x, *y, *z),
-                        ..default()
-                    });
+                    desired_asset_meshes.0.push((
+                        model_handle,
+                        Transform::from_xyz(*x, *y, *z),
+                        false,
+                    ));
                 }
             }
             AssetEvent::Modified { handle: _handle } => {
