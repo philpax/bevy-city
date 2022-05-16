@@ -38,11 +38,15 @@ fn main() -> anyhow::Result<()> {
         std::fs::read_dir(&args.path)?
             .filter_map(Result::ok)
             .map(|d| d.path())
-            .filter(|p| p.extension().unwrap_or_default() == "dff")
+            .filter(|p| {
+                let extension = p.extension().unwrap_or_default();
+                extension == "dff" || extension == "txd"
+            })
             .collect()
     } else {
         vec![args.path]
     };
+
     for path in &paths {
         if paths.len() > 1 {
             println!("{:?}", path);
@@ -51,7 +55,15 @@ fn main() -> anyhow::Result<()> {
         let file = rwf::raw::BinaryStreamFile::open(path)?;
         match args.mode {
             Mode::Raw => print_section(&file.sections[0], 0),
-            Mode::Processed => println!("{:?}", rwf::dff::Model::from_raw(&file)),
+            Mode::Processed => {
+                let extension = path.extension().unwrap_or_default();
+
+                if extension == "dff" {
+                    println!("{:?}", rwf::dff::Model::from_raw(&file));
+                } else if extension == "txd" {
+                    println!("{:?}", rwf::txd::Texture::from_raw(&file));
+                }
+            }
         }
     }
     Ok(())
