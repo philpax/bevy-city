@@ -1,4 +1,4 @@
-use bevy_asset::{AssetLoader, AssetPath, LoadContext, LoadedAsset};
+use bevy_asset::{AssetLoader, LoadContext, LoadedAsset};
 use bevy_reflect::TypeUuid;
 use bevy_render::{
     mesh::{Indices, Mesh},
@@ -41,9 +41,9 @@ pub enum RwError {
 #[derive(TypeUuid)]
 #[uuid = "7f24d251-ce34-4078-85b8-a8f99fc790db"]
 pub struct Dff {
+    pub name: String,
     pub mesh: Mesh,
     pub materials: Vec<rwf::dff::Material>,
-    pub asset_paths: Vec<AssetPath<'static>>,
 }
 
 async fn load_dff<'a, 'b>(
@@ -77,26 +77,19 @@ async fn load_dff<'a, 'b>(
         set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
         mesh.set_indices(Some(Indices::U16(model.indices.clone())));
 
-        let materials = model.materials.clone();
-        let asset_paths: Vec<_> = model
-            .materials
-            .iter()
-            .map(|m| {
-                AssetPath::new(
-                    load_context.path().with_extension("txd"),
-                    Some(m.texture.name.clone()),
-                )
-            })
-            .collect();
+        let name = load_context
+            .path()
+            .file_stem()
+            .expect("failed to extract filestem")
+            .to_string_lossy()
+            .to_string();
 
-        load_context.set_default_asset(
-            LoadedAsset::new(Dff {
-                mesh,
-                materials,
-                asset_paths: asset_paths.clone(),
-            })
-            .with_dependencies(asset_paths),
-        );
+        let materials = model.materials.clone();
+        load_context.set_default_asset(LoadedAsset::new(Dff {
+            name,
+            mesh,
+            materials,
+        }));
     }
 
     Ok(())
