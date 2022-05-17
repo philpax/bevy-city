@@ -13,14 +13,14 @@ pub struct Ipl {
 
 impl Ipl {
     pub fn parse(data: &str) -> Self {
-        let sections = super::shared::categorise_lines(data);
+        let sections = super::common::categorise_lines(data);
 
         let instances: Vec<_> = sections
             .get("inst")
             .expect("no inst")
             .iter()
             .map(|line| {
-                let segments: Vec<_> = line.split(',').map(|s| s.trim()).collect();
+                let segments: Vec<_> = super::common::split_line(line);
                 (
                     segments[1].to_string(),
                     [
