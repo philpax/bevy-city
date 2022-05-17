@@ -6,8 +6,8 @@ use bevy_editor_pls::prelude::*;
 use bevy_renderware::dff::Dff;
 use clap::Parser;
 
-pub mod maps;
-use maps::ipl_parser::Ipl;
+pub mod assets;
+use assets::Ipl;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
     app.insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy_renderware::RwPlugin)
-        .add_plugin(maps::ipl_parser::IplPlugin)
+        .add_plugin(assets::IplPlugin)
         .add_plugin(EditorPlugin)
         .insert_resource(DesiredAssetMeshes(vec![]));
 

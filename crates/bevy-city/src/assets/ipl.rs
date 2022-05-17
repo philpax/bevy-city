@@ -4,9 +4,8 @@ use bevy::{
     reflect::TypeUuid,
     utils::BoxedFuture,
 };
-use std::collections::HashMap;
 
-#[derive(Debug, TypeUuid)]
+#[derive(Debug, TypeUuid, PartialEq)]
 #[uuid = "eef31d55-f995-4073-87a0-3c50e7fabef7"]
 pub struct Ipl {
     pub instances: Vec<(String, [f32; 3])>,
@@ -14,24 +13,7 @@ pub struct Ipl {
 
 impl Ipl {
     pub fn parse(data: &str) -> Self {
-        let mut current_section = None;
-        let mut sections: HashMap<&str, Vec<&str>> = HashMap::new();
-        for line in data.lines() {
-            if line.starts_with('#') {
-                continue;
-            }
-
-            if let Some(section) = current_section {
-                if line == "end" {
-                    current_section = None;
-                } else {
-                    sections.get_mut(section).unwrap().push(line);
-                }
-            } else {
-                current_section = Some(line);
-                sections.insert(line, vec![]);
-            }
-        }
+        let sections = super::shared::categorise_lines(data);
 
         let instances: Vec<_> = sections
             .get("inst")
@@ -86,6 +68,8 @@ impl Plugin for IplPlugin {
 }
 
 mod tests {
+    pub use super::*;
+
     #[test]
     fn can_parse_downtown_subset() {
         const TEST_DATA: &str = r"
@@ -104,7 +88,16 @@ end
 ";
 
         let test_data = TEST_DATA.trim();
-        let ipl = super::Ipl::parse(test_data);
-        println!("{:?}", ipl);
+        let ipl = Ipl::parse(test_data);
+        assert_eq!(
+            ipl,
+            Ipl {
+                instances: vec![
+                    ("doontoon03".to_owned(), [-445.48627, 42.783905, -1280.1328]),
+                    ("doontoon04".to_owned(), [-303.83, 6.61, -1394.5068]),
+                    ("doontoon09".to_owned(), [-798.44543, 12.291595, -1039.3052]),
+                ],
+            },
+        );
     }
 }
