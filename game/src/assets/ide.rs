@@ -42,6 +42,7 @@ pub struct Object {
     pub mesh_count: Option<u16>,
     pub draw_distance: f32,
     pub flags: ObjectFlagsVC,
+    pub times: Option<(f32, f32)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -71,35 +72,11 @@ impl Ide {
                 .iter()
         };
 
-        let objects: Vec<_> = section_iter("objs")
-            .map(|line| {
-                let segments: Vec<_> = super::common::split_line(line);
-                let (id, model_name, texture_name, flags) = (
-                    segments[0].parse().unwrap(),
-                    segments[1].to_string(),
-                    segments[2].to_string(),
-                    ObjectFlagsVC::from_bits(segments.last().unwrap().parse().unwrap()).unwrap(),
-                );
-
-                let (mesh_count, draw_distance) = match segments.len() {
-                    5 => (None, segments[3].parse().unwrap()),
-                    6 | 7 | 8 => (
-                        Some(segments[3].parse().unwrap()),
-                        segments[4].parse().unwrap(),
-                    ),
-                    _ => panic!("unexpected length of ide segments"),
-                };
-
-                Object {
-                    id,
-                    model_name,
-                    texture_name,
-                    mesh_count,
-                    draw_distance,
-                    flags,
-                }
-            })
-            .collect();
+        let objects: Vec<_> = Iterator::chain(
+            section_iter("objs").map(|line| parse_object(line, false)),
+            section_iter("tobj").map(|line| parse_object(line, true)),
+        )
+        .collect();
 
         let weapons: Vec<_> = section_iter("weap")
             .map(|line| {
@@ -123,6 +100,40 @@ impl Ide {
             .collect();
 
         Ide { objects, weapons }
+    }
+}
+
+fn parse_object(line: &str, is_tobj: bool) -> Object {
+    let mut segments: Vec<_> = super::common::split_line(line);
+    let times = if is_tobj {
+        let times = segments.split_off(segments.len() - 2);
+        Some((times[0].parse().unwrap(), times[1].parse().unwrap()))
+    } else {
+        None
+    };
+
+    let (id, model_name, texture_name, flags) = (
+        segments[0].parse().unwrap(),
+        segments[1].to_string(),
+        segments[2].to_string(),
+        ObjectFlagsVC::from_bits(segments.last().unwrap().parse().unwrap()).unwrap(),
+    );
+    let (mesh_count, draw_distance) = match segments.len() {
+        5 => (None, segments[3].parse().unwrap()),
+        6 | 7 | 8 => (
+            Some(segments[3].parse().unwrap()),
+            segments[4].parse().unwrap(),
+        ),
+        _ => panic!("unexpected length of ide segments"),
+    };
+    Object {
+        id,
+        model_name,
+        texture_name,
+        mesh_count,
+        draw_distance,
+        flags,
+        times,
     }
 }
 
@@ -192,6 +203,7 @@ end
                         mesh_count: Some(1),
                         draw_distance: 100.0,
                         flags: F::IGNORE_LIGHTING | F::DONT_RECEIVE_SHADOWS,
+                        times: None,
                     },
                     Object {
                         id: 4721,
@@ -200,6 +212,7 @@ end
                         mesh_count: Some(1),
                         draw_distance: 100.0,
                         flags: F::IGNORE_LIGHTING | F::DONT_RECEIVE_SHADOWS,
+                        times: None,
                     },
                     Object {
                         id: 4722,
@@ -208,8 +221,35 @@ end
                         mesh_count: Some(1),
                         draw_distance: 100.0,
                         flags: F::DRAW_LAST | F::IGNORE_LIGHTING | F::DONT_RECEIVE_SHADOWS,
+                        times: None,
                     },
                 ],
+                weapons: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn can_parse_tobj() {
+        const TEST_DATA: &str = r#"
+tobj
+2750, Roosbridge_dt, bwidge, 1, 100, 0, 5, 23
+end
+"#;
+
+        let test_data = TEST_DATA.trim();
+        assert_eq!(
+            Ide::parse(test_data),
+            Ide {
+                objects: vec![Object {
+                    id: 2750,
+                    model_name: "Roosbridge_dt".to_string(),
+                    texture_name: "bwidge".to_string(),
+                    mesh_count: Some(1),
+                    draw_distance: 100.0,
+                    flags: ObjectFlagsVC::empty(),
+                    times: Some((5.0, 23.0)),
+                }],
                 weapons: vec![],
             }
         );
@@ -258,6 +298,7 @@ end
                     mesh_count: Some(2),
                     draw_distance: 20.0,
                     flags: ObjectFlagsVC::empty(),
+                    times: None,
                 }],
                 weapons: vec![Weapon {
                     id: 265,
