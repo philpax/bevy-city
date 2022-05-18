@@ -306,7 +306,6 @@ fn process_pending_desired_meshes(
                     base_color,
                     base_color_texture,
                     unlit: true,
-                    alpha_mode: AlphaMode::Blend,
                     ..default()
                 }),
                 transform: *transform,
