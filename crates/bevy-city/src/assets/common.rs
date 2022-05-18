@@ -59,7 +59,7 @@ end
 
     #[test]
     fn can_split_line_with_mix_of_commas_and_spaces() {
-        let split = split_line("Id, ModelName, TxdName, MeshCount    DrawDistance, Flags");
+        let split = split_line("Id, ModelName, TxdName,    MeshCount\t\tDrawDistance, Flags");
         assert_eq!(
             split,
             vec![
