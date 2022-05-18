@@ -44,19 +44,34 @@ async fn load_txd<'a, 'b>(
     let textures = rwf::txd::Texture::from_raw(&raw);
 
     for texture in textures {
-        load_context.set_labeled_asset(
-            &texture.name,
-            LoadedAsset::new(Image::new(
-                Extent3d {
-                    width: texture.width as _,
-                    height: texture.height as _,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                texture.data.clone(),
-                TextureFormat::Rgba8Unorm,
-            )),
+        let mut image = Image::new(
+            Extent3d {
+                width: texture.width as _,
+                height: texture.height as _,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            texture.data.clone(),
+            TextureFormat::Rgba8Unorm,
         );
+
+        let remap_addressing =
+            |addressing: rwf::txd::TextureAddressing| -> bevy_render::render_resource::AddressMode {
+                use bevy_render::render_resource::AddressMode;
+                use rwf::txd::TextureAddressing;
+
+                match addressing {
+                    TextureAddressing::NoTiling => AddressMode::Repeat,
+                    TextureAddressing::Wrap => AddressMode::Repeat,
+                    TextureAddressing::Mirror => AddressMode::MirrorRepeat,
+                    TextureAddressing::Clamp => AddressMode::ClampToEdge,
+                    TextureAddressing::Border => AddressMode::ClampToBorder,
+                }
+            };
+
+        image.sampler_descriptor.address_mode_u = remap_addressing(texture.uv.0);
+        image.sampler_descriptor.address_mode_v = remap_addressing(texture.uv.1);
+        load_context.set_labeled_asset(&texture.name, LoadedAsset::new(image));
     }
 
     Ok(())
