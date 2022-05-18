@@ -187,6 +187,11 @@ fn handle_ipl_events(
                 let ipl = assets.get(handle).unwrap();
 
                 for instance in &ipl.instances {
+                    if instance.interior != 0 {
+                        // We don't support interiors right now!
+                        continue;
+                    }
+
                     let name = &instance.model_name;
                     if name.len() > 3 && name[..3].eq_ignore_ascii_case("lod") {
                         continue;
