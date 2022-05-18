@@ -2,6 +2,8 @@
 
 Trying to load Vice City assets in Bevy for the fun of it.
 
+![WIP of the loaded map with broken geometry and textures](wip.png)
+
 Keep your assets in the `assets` folder, such that you have:
 
     assets/Audio
@@ -16,7 +18,7 @@ Keep your assets in the `assets` folder, such that you have:
     assets/skins
     assets/txd
 
-and keep them closer with a symlink from `assets` to `crate/bevy-city/assets`:
+and keep them closer with a symlink from `assets` to `crate/bevy-city/assets` (this should already exist):
 
     ln -s ../../assets crates/bevy-city/assets
 
