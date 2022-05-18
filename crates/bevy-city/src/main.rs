@@ -31,6 +31,7 @@ enum PendingIpls {
     Loaded(Vec<Handle<Ipl>>),
 }
 struct ModelTextureMap(HashMap<String, String>);
+const EXTERIOR_MAP_SIZE: f32 = 10_000.0;
 
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
@@ -103,7 +104,19 @@ fn asset_viewer(
     });
 }
 
-fn load_maps(mut commands: Commands) {
+fn load_maps(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: EXTERIOR_MAP_SIZE,
+        })),
+        material: materials.add(Color::rgba_u8(78, 156, 181, 255).into()),
+        ..default()
+    });
+
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_translation(Vec3::ONE * 1000.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
