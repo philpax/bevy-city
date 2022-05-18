@@ -1,13 +1,17 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::{render_resource::WgpuFeatures, settings::WgpuSettings},
+};
+
 use bevy_atmosphere::*;
 use bevy_editor_pls::{
     editor_window::{EditorWindow, EditorWindowContext},
     prelude::*,
 };
-
 use bevy_renderware::dff::Dff;
+
 use clap::Parser;
 
 pub mod assets;
@@ -48,6 +52,10 @@ fn main() -> anyhow::Result<()> {
 
     // Preliminary setup
     app.insert_resource(Msaa { samples: 4 })
+        .insert_resource(WgpuSettings {
+            features: WgpuFeatures::POLYGON_MODE_LINE,
+            ..default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy_renderware::RwPlugin)
         .add_plugins(assets::ViceCityPluginGroup)
