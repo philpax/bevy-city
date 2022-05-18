@@ -238,6 +238,7 @@ dependencies = [
  "bevy",
  "bevy_atmosphere",
  "bevy_editor_pls",
+ "bevy_flycam",
  "bevy_renderware",
  "bitflags",
  "clap",
@@ -509,6 +510,15 @@ dependencies = [
  "webbrowser",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "bevy_flycam"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62afad12266a3ecb439c7386896deab6ec1ccff5c2f9baaa916ae56dc02f7b4a"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

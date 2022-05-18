@@ -10,6 +10,7 @@ use bevy_editor_pls::{
     editor_window::{EditorWindow, EditorWindowContext},
     prelude::*,
 };
+use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
 use bevy_renderware::dff::Dff;
 
 use clap::Parser;
@@ -81,6 +82,11 @@ fn main() -> anyhow::Result<()> {
         app.insert_resource(PendingIpls::Unloaded)
             .add_startup_system(load_maps)
             // Gameplay
+            .add_plugin(NoCameraPlayerPlugin)
+            .insert_resource(MovementSettings {
+                sensitivity: 0.00015,
+                speed: 120.0,
+            })
             .insert_resource(GameTime(12.0))
             .add_system(update_game_time)
             .add_editor_window::<TimeEditorWindow>()
@@ -148,10 +154,13 @@ fn load_maps(
         .spawn_bundle(DirectionalLightBundle { ..default() })
         .insert(Sun);
 
-    commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_translation(Vec3::ONE * 1000.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    commands
+        .spawn_bundle(PerspectiveCameraBundle {
+            transform: Transform::from_translation(Vec3::ONE * 1000.0)
+                .looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        })
+        .insert(FlyCam);
 }
 
 fn handle_dat_events(
