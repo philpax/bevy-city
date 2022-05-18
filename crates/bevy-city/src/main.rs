@@ -25,6 +25,11 @@ enum LoadedIdes {
     Unprocessed(Vec<Handle<Ide>>),
     Processed,
 }
+enum PendingIpls {
+    NoneRequested,
+    Unloaded,
+    Loaded(Vec<Handle<Ipl>>),
+}
 struct ModelTextureMap(HashMap<String, String>);
 
 fn main() -> anyhow::Result<()> {
@@ -52,9 +57,12 @@ fn main() -> anyhow::Result<()> {
     // Primary behaviour
     if let Some(path) = args.path {
         let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
-        app.insert_resource(path).add_startup_system(asset_viewer);
+        app.insert_resource(PendingIpls::NoneRequested)
+            .insert_resource(path)
+            .add_startup_system(asset_viewer);
     } else {
-        app.add_startup_system(load_maps);
+        app.insert_resource(PendingIpls::Unloaded)
+            .add_startup_system(load_maps);
     };
 
     app.run();
@@ -95,48 +103,7 @@ fn asset_viewer(
     });
 }
 
-fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
-    const MAP_PATHS: &[&str] = &[
-        "data/maps/airport/airport.ipl",
-        "data/maps/airportN/airportN.ipl",
-        "data/maps/bank/bank.ipl",
-        "data/maps/bridge/bridge.ipl",
-        "data/maps/cisland/cisland.ipl",
-        "data/maps/club/CLUB.ipl",
-        "data/maps/concerth/concerth.ipl",
-        // "data/maps/cull.ipl",
-        "data/maps/docks/docks.ipl",
-        "data/maps/downtown/downtown.ipl",
-        "data/maps/downtows/downtows.ipl",
-        "data/maps/golf/golf.ipl",
-        "data/maps/haiti/haiti.ipl",
-        "data/maps/haitiN/haitin.ipl",
-        "data/maps/hotel/hotel.ipl",
-        // "data/maps/islandsf/islandsf.ipl",
-        "data/maps/lawyers/lawyers.ipl",
-        "data/maps/littleha/littleha.ipl",
-        "data/maps/mall/mall.ipl",
-        "data/maps/mansion/mansion.ipl",
-        "data/maps/nbeach/nbeach.ipl",
-        "data/maps/nbeachbt/nbeachbt.ipl",
-        "data/maps/nbeachw/nbeachw.ipl",
-        "data/maps/oceandn/oceandN.ipl",
-        "data/maps/oceandrv/oceandrv.ipl",
-        // "data/maps/paths.ipl",
-        "data/maps/starisl/starisl.ipl",
-        "data/maps/stripclb/stripclb.ipl",
-        "data/maps/washintn/washintn.ipl",
-        "data/maps/washints/washints.ipl",
-        "data/maps/yacht/yacht.ipl",
-    ];
-
-    commands.insert_resource(
-        MAP_PATHS
-            .iter()
-            .map(|path| asset_server.load(*path))
-            .collect::<Vec<Handle<Ipl>>>(),
-    );
-
+fn load_maps(mut commands: Commands) {
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_translation(Vec3::ONE * 1000.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
@@ -146,6 +113,7 @@ fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn handle_dat_events(
     mut ev_asset: EventReader<AssetEvent<Dat>>,
     mut loaded_ides: ResMut<LoadedIdes>,
+    mut pending_ipls: ResMut<PendingIpls>,
     global_dat: Res<GlobalDat>,
     asset_server: Res<AssetServer>,
     assets: Res<Assets<Dat>>,
@@ -154,6 +122,7 @@ fn handle_dat_events(
         match ev {
             AssetEvent::Created { handle } if *handle == global_dat.0 => {
                 let mut ides = vec![asset_server.load("data/default.ide")];
+                let mut ipls = vec![];
 
                 let dat = assets.get(handle).unwrap();
                 for (filetype, path) in dat
@@ -170,16 +139,32 @@ fn handle_dat_events(
                         .replace('\\', "/")
                         .replace("DATA/MAPS", "data/maps")
                         .replace(".IDE", ".ide")
+                        .replace(".IPL", ".ipl")
                         // hack: fix the case on some map IDEs...
-                        .replace("haitin", "haitiN")
-                        .replace("oceandn/oceandn", "oceandn/oceandN");
+                        .replace("haitin/haitin.ide", "haitiN/haitiN.ide")
+                        .replace("oceandn/oceandn", "oceandn/oceandN")
+                        // hack: fix the case on some map IDLs...
+                        .replace("club.ipl", "CLUB.ipl")
+                        .replace("haitin/haitin.ipl", "haitiN/haitin.ipl");
 
-                    if filetype == "IDE" {
-                        ides.push(asset_server.load(&path));
+                    // hack: remove some ipls we don't care for
+                    if path.ends_with("islandsf.ipl") {
+                        continue;
+                    }
+
+                    match filetype {
+                        "IDE" => ides.push(asset_server.load(&path)),
+                        "IPL" => ipls.push(path),
+                        _ => {}
                     }
                 }
 
                 *loaded_ides = LoadedIdes::Unprocessed(ides);
+                if let PendingIpls::Unloaded = *pending_ipls {
+                    *pending_ipls = PendingIpls::Loaded(
+                        ipls.into_iter().map(|p| asset_server.load(&p)).collect(),
+                    );
+                }
             }
             AssetEvent::Created { .. } => {}
             AssetEvent::Modified { handle: _handle } => {
@@ -303,7 +288,7 @@ fn process_pending_ides(
         });
 
         if ides.is_empty() {
-        *loaded_ides = LoadedIdes::Processed;
+            *loaded_ides = LoadedIdes::Processed;
         }
     }
 }
