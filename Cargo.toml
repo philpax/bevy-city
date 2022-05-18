@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "crates/bevy-city",
-    "crates/renderware-format",
-    "crates/renderware-format-converter",
-    "crates/renderware-format-dumper",
+    "game",
     "crates/bevy_renderware",
+    "crates/renderware-format",
+    "tools/renderware-format-converter",
+    "tools/renderware-format-dumper",
 ]
 resolver = "2"

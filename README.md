@@ -18,9 +18,9 @@ Keep your assets in the `assets` folder, such that you have:
     assets/skins
     assets/txd
 
-and keep them closer with a symlink from `assets` to `crate/bevy-city/assets` (this should already exist):
+and keep them closer with a symlink from `assets` to `game/assets` (this should already exist):
 
-    ln -s ../../assets crates/bevy-city/assets
+    cd game && ln -s ../assets assets
 
 and try running with
 
