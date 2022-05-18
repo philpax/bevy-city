@@ -186,16 +186,27 @@ fn handle_ipl_events(
             AssetEvent::Created { handle } => {
                 let ipl = assets.get(handle).unwrap();
 
-                for (name, [x, y, z]) in &ipl.instances {
+                for instance in &ipl.instances {
+                    let name = &instance.model_name;
                     if name.len() > 3 && name[..3].eq_ignore_ascii_case("lod") {
                         continue;
                     }
 
                     let model_handle = asset_server.load(&format!("models/gta3/{name}.dff"));
+                    let (translation, _rotation, scale) =
+                        (instance.position, instance.rotation, instance.scale);
+
+                    // HACK(philpax): fix this at some point. I believe the parsed
+                    // representation has the elements in the wrong order.
+                    let rotation = default();
 
                     desired_asset_meshes.0.push((
                         model_handle,
-                        Transform::from_xyz(*x, *y, *z),
+                        Transform {
+                            translation,
+                            rotation,
+                            scale,
+                        },
                         false,
                     ));
                 }
