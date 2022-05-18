@@ -74,13 +74,12 @@ impl Ide {
         let objects: Vec<_> = section_iter("objs")
             .map(|line| {
                 let segments: Vec<_> = super::common::split_line(line);
-                let (id, model_name, texture_name) = (
+                let (id, model_name, texture_name, flags) = (
                     segments[0].parse().unwrap(),
                     segments[1].to_string(),
                     segments[2].to_string(),
+                    ObjectFlagsVC::from_bits(segments.last().unwrap().parse().unwrap()).unwrap(),
                 );
-                let flags =
-                    ObjectFlagsVC::from_bits(segments.last().unwrap().parse().unwrap()).unwrap();
 
                 let (mesh_count, draw_distance) = match segments.len() {
                     5 => (None, segments[3].parse().unwrap()),
@@ -105,13 +104,13 @@ impl Ide {
         let weapons: Vec<_> = section_iter("weap")
             .map(|line| {
                 let segments: Vec<_> = super::common::split_line(line);
-                let (id, model_name, texture_name, animation_name) = (
+                let (id, model_name, texture_name, animation_name, draw_distance) = (
                     segments[0].parse().unwrap(),
                     segments[1].to_string(),
                     segments[2].to_string(),
                     segments[3].to_string(),
+                    segments[5].parse().unwrap(),
                 );
-                let draw_distance = segments[5].parse().unwrap();
 
                 Weapon {
                     id,
