@@ -29,6 +29,7 @@ struct Cli {
 struct DesiredAssetRenderPath(PathBuf);
 struct DesiredAssetMeshes(Vec<(Handle<Dff>, Transform, bool)>);
 struct GlobalDat(Handle<Dat>);
+#[derive(PartialEq, Eq)]
 enum LoadedIdes {
     Unloaded,
     Unprocessed(Vec<Handle<Ide>>),
@@ -282,11 +283,12 @@ fn process_pending_desired_meshes(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
+    loaded_ides: Res<LoadedIdes>,
     model_texture_map: Res<ModelTextureMap>,
     asset_server: Res<AssetServer>,
     asset_meshes: Res<Assets<Dff>>,
 ) {
-    if model_texture_map.0.is_empty() {
+    if *loaded_ides != LoadedIdes::Processed {
         return;
     }
 
