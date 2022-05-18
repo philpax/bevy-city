@@ -7,7 +7,7 @@ use bevy_renderware::dff::Dff;
 use clap::Parser;
 
 pub mod assets;
-use assets::{Dat, Ipl};
+use assets::{Dat, Ide, Ipl};
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -20,6 +20,11 @@ struct Cli {
 struct DesiredAssetRenderPath(PathBuf);
 struct DesiredAssetMeshes(Vec<(Handle<Dff>, Transform, bool)>);
 struct GlobalDat(Handle<Dat>);
+enum LoadedIdes {
+    Unloaded,
+    Unprocessed(Vec<Handle<Ide>>),
+    Processed,
+}
 struct ModelTextureMap(HashMap<String, String>);
 
 fn main() -> anyhow::Result<()> {
@@ -34,23 +39,23 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(assets::ViceCityPluginGroup)
         .add_plugin(EditorPlugin)
         .insert_resource(DesiredAssetMeshes(vec![]))
+        .insert_resource(LoadedIdes::Unloaded)
         .insert_resource(ModelTextureMap(HashMap::new()));
 
-    // Systems required before anything else
-    app.add_startup_system(load_vice_city_dat);
-
-    // // Primary behaviour
-    // if let Some(path) = args.path {
-    //     let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
-    //     app.insert_resource(path).add_startup_system(asset_viewer);
-    // } else {
-    //     app.add_startup_system(load_maps);
-    // };
-
-    // Systems that can run whenever
-    app.add_system(process_pending_desired_meshes)
+    // Systems
+    app.add_startup_system(load_vice_city_dat)
         .add_system(handle_dat_events)
-        .add_system(handle_ipl_events);
+        .add_system(handle_ipl_events)
+        .add_system(process_pending_desired_meshes)
+        .add_system(process_pending_ides);
+
+    // Primary behaviour
+    if let Some(path) = args.path {
+        let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
+        app.insert_resource(path).add_startup_system(asset_viewer);
+    } else {
+        app.add_startup_system(load_maps);
+    };
 
     app.run();
 
@@ -61,15 +66,9 @@ fn load_vice_city_dat(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(GlobalDat(asset_server.load("data/gta_vc.dat")));
 }
 
-// Write a Dat asset change system that will match against GlobalDat
-// Once all the lines from GlobalDat are available, use those to load IDEs
-// As the IDEs stream in, add them to the global model texture map
-// Once we're done with all of the IDEs, then we can try loading our corresponding systems
-
 fn asset_viewer(
     mut commands: Commands,
     mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
-    model_texture_map: Res<ModelTextureMap>,
     asset_server: Res<AssetServer>,
     desired_asset_render_path: Res<DesiredAssetRenderPath>,
 ) {
@@ -94,50 +93,6 @@ fn asset_viewer(
             .looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
         ..default()
     });
-}
-
-fn process_pending_desired_meshes(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
-    model_texture_map: Res<ModelTextureMap>,
-    asset_server: Res<AssetServer>,
-    asset_meshes: Res<Assets<Dff>>,
-) {
-    for (handle, transform, spawned) in &mut desired_asset_meshes.0 {
-        if *spawned {
-            continue;
-        }
-
-        if let Some(dff) = asset_meshes.get(handle.clone()) {
-            let mesh = meshes.add(dff.mesh.clone());
-            let dff_material = dff.materials.get(0);
-
-            let base_color = dff_material
-                .map(|m| Color::rgba_u8(m.color.r, m.color.g, m.color.b, m.color.a))
-                .unwrap_or(Color::WHITE);
-
-            let base_color_path = model_texture_map
-                .0
-                .get(&dff.name)
-                .map(|name| format!("models/gta3/{name}.txd"));
-            let base_color_texture = base_color_path.map(|ap| asset_server.load(&ap));
-
-            commands.spawn_bundle(PbrBundle {
-                mesh,
-                material: materials.add(StandardMaterial {
-                    base_color,
-                    base_color_texture,
-                    unlit: true,
-                    ..default()
-                }),
-                transform: transform.clone(),
-                ..default()
-            });
-            *spawned = true;
-        }
-    }
 }
 
 fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -190,23 +145,43 @@ fn load_maps(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn handle_dat_events(
     mut ev_asset: EventReader<AssetEvent<Dat>>,
+    mut loaded_ides: ResMut<LoadedIdes>,
     global_dat: Res<GlobalDat>,
     asset_server: Res<AssetServer>,
     assets: Res<Assets<Dat>>,
 ) {
     for ev in ev_asset.iter() {
         match ev {
-            AssetEvent::Created { handle } => {
-                if *handle == global_dat.0 {
-                    let dat = assets.get(handle).unwrap();
-                    let lines: Vec<_> = dat
-                        .0
-                        .lines()
-                        .filter(|l| !(l.trim().is_empty() || l.starts_with('#')))
-                        .collect();
-                    info!("{:?}", lines);
+            AssetEvent::Created { handle } if *handle == global_dat.0 => {
+                let mut ides = vec![asset_server.load("data/default.ide")];
+
+                let dat = assets.get(handle).unwrap();
+                for (filetype, path) in dat
+                    .0
+                    .lines()
+                    .filter(|l| !(l.trim().is_empty() || l.starts_with('#')))
+                    .filter_map(|l| l.split_once(' '))
+                {
+                    if !path.starts_with("DATA\\MAPS") {
+                        continue;
+                    }
+
+                    let path = path
+                        .replace('\\', "/")
+                        .replace("DATA/MAPS", "data/maps")
+                        .replace(".IDE", ".ide")
+                        // hack: fix the case on some map IDEs...
+                        .replace("haitin", "haitiN")
+                        .replace("oceandn/oceandn", "oceandn/oceandN");
+
+                    if filetype == "IDE" {
+                        ides.push(asset_server.load(&path));
+                    }
                 }
+
+                *loaded_ides = LoadedIdes::Unprocessed(ides);
             }
+            AssetEvent::Created { .. } => {}
             AssetEvent::Modified { handle: _handle } => {
                 panic!("you aren't meant to modify the DATs during gameplay!");
             }
@@ -245,5 +220,85 @@ fn handle_ipl_events(
             }
             AssetEvent::Removed { handle: _handle } => {}
         }
+    }
+}
+
+fn process_pending_desired_meshes(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
+    model_texture_map: Res<ModelTextureMap>,
+    asset_server: Res<AssetServer>,
+    asset_meshes: Res<Assets<Dff>>,
+) {
+    if model_texture_map.0.is_empty() {
+        return;
+    }
+
+    for (handle, transform, spawned) in &mut desired_asset_meshes.0 {
+        if *spawned {
+            continue;
+        }
+
+        if let Some(dff) = asset_meshes.get(handle.clone()) {
+            let mesh = meshes.add(dff.mesh.clone());
+            let dff_material = dff.materials.get(0);
+
+            let (base_color, base_color_texture) =
+                match (dff_material, model_texture_map.0.get(&dff.name)) {
+                    (Some(material), Some(name)) => (
+                        Color::rgba_u8(
+                            material.color.r,
+                            material.color.g,
+                            material.color.b,
+                            material.color.a,
+                        ),
+                        Some(asset_server.load(&format!(
+                            "models/gta3/{}.txd#{}",
+                            name.replace("generic", "Generic"),
+                            material.texture.name
+                        ))),
+                    ),
+                    _ => (Color::WHITE, None),
+                };
+
+            commands.spawn_bundle(PbrBundle {
+                mesh,
+                material: materials.add(StandardMaterial {
+                    base_color,
+                    base_color_texture,
+                    unlit: true,
+                    alpha_mode: AlphaMode::Blend,
+                    ..default()
+                }),
+                transform: *transform,
+                ..default()
+            });
+
+            *spawned = true;
+        }
+    }
+}
+
+fn process_pending_ides(
+    mut loaded_ides: ResMut<LoadedIdes>,
+    mut model_texture_map: ResMut<ModelTextureMap>,
+    assets_ide: Res<Assets<Ide>>,
+) {
+    if let LoadedIdes::Unprocessed(unprocessed) = &*loaded_ides {
+        for ide in unprocessed {
+            if let Some(ide) = assets_ide.get(ide.clone()) {
+                let mtm = &mut model_texture_map.0;
+                for object in ide.objects.iter() {
+                    mtm.insert(object.model_name.clone(), object.texture_name.clone());
+                }
+                for weapon in ide.weapons.iter() {
+                    mtm.insert(weapon.model_name.clone(), weapon.texture_name.clone());
+                }
+            }
+        }
+
+        *loaded_ides = LoadedIdes::Processed;
     }
 }
