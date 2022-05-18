@@ -1,7 +1,11 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use bevy::prelude::*;
-use bevy_editor_pls::prelude::*;
+use bevy_atmosphere::*;
+use bevy_editor_pls::{
+    editor_window::{EditorWindow, EditorWindowContext},
+    prelude::*,
+};
 
 use bevy_renderware::dff::Dff;
 use clap::Parser;
@@ -31,6 +35,10 @@ enum PendingIpls {
     Loaded(Vec<Handle<Ipl>>),
 }
 struct ModelTextureMap(HashMap<String, String>);
+struct GameTime(f32);
+#[derive(Component)]
+struct Sun;
+
 const EXTERIOR_MAP_SIZE: f32 = 10_000.0;
 
 fn main() -> anyhow::Result<()> {
@@ -48,7 +56,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(LoadedIdes::Unloaded)
         .insert_resource(ModelTextureMap(HashMap::new()));
 
-    // Systems
+    // Loading systems
     app.add_startup_system(load_vice_city_dat)
         .add_system(handle_dat_events)
         .add_system(handle_ipl_events)
@@ -63,7 +71,18 @@ fn main() -> anyhow::Result<()> {
             .add_startup_system(asset_viewer);
     } else {
         app.insert_resource(PendingIpls::Unloaded)
-            .add_startup_system(load_maps);
+            .add_startup_system(load_maps)
+            // Gameplay
+            .insert_resource(GameTime(12.0))
+            .add_system(update_game_time)
+            .add_editor_window::<TimeEditorWindow>()
+            // Bevy atmosphere
+            .insert_resource(AtmosphereMat::default())
+            .add_plugin(AtmospherePlugin {
+                dynamic: true,
+                sky_radius: EXTERIOR_MAP_SIZE,
+            })
+            .add_system(daylight_cycle);
     };
 
     app.run();
@@ -111,11 +130,15 @@ fn load_maps(
 ) {
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane {
-            size: EXTERIOR_MAP_SIZE,
+            size: EXTERIOR_MAP_SIZE * 2.0,
         })),
         material: materials.add(Color::rgba_u8(78, 156, 181, 255).into()),
         ..default()
     });
+
+    commands
+        .spawn_bundle(DirectionalLightBundle { ..default() })
+        .insert(Sun);
 
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_translation(Vec3::ONE * 1000.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -319,5 +342,45 @@ fn process_pending_ides(
         if ides.is_empty() {
             *loaded_ides = LoadedIdes::Processed;
         }
+    }
+}
+
+fn update_game_time(mut game_time: ResMut<GameTime>, time: Res<Time>) {
+    game_time.0 = (game_time.0 + (time.delta_seconds() / 60.0)) % 24.0;
+}
+
+pub struct TimeEditorWindow;
+impl EditorWindow for TimeEditorWindow {
+    type State = ();
+    const NAME: &'static str = "Time";
+
+    fn ui(world: &mut World, _cx: EditorWindowContext, ui: &mut bevy_editor_pls::egui::Ui) {
+        if let Some(mut time) = world.get_resource_mut::<GameTime>() {
+            ui.add(
+                bevy_editor_pls::egui::widgets::Slider::new(&mut time.0, 0.0..=24.0)
+                    .text("Current time"),
+            );
+        }
+    }
+}
+
+fn daylight_cycle(
+    mut sky_mat: ResMut<AtmosphereMat>,
+    mut query: Query<(&mut Transform, &mut DirectionalLight), With<Sun>>,
+    time: Res<GameTime>,
+) {
+    let mut pos = sky_mat.sun_position;
+    // The sky is directly overhead when t = pi/2.
+    // pi/2/2pi = 1/4 * 24 = 6
+    // That is, the sun will be overhead when the original time is 6h.
+    // We offset the time to make 12h the overhead time.
+    let t = (time.0 - 6.0) / 24.0 * std::f32::consts::TAU;
+    pos.y = t.sin();
+    pos.z = t.cos();
+    sky_mat.sun_position = pos;
+
+    if let Some((mut light_trans, mut directional)) = query.single_mut().into() {
+        light_trans.rotation = Quat::from_rotation_x(-pos.y.atan2(pos.z));
+        directional.illuminance = t.sin().max(0.0).powf(2.0) * 100000.0;
     }
 }
