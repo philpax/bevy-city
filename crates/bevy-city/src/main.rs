@@ -286,9 +286,9 @@ fn process_pending_ides(
     mut model_texture_map: ResMut<ModelTextureMap>,
     assets_ide: Res<Assets<Ide>>,
 ) {
-    if let LoadedIdes::Unprocessed(unprocessed) = &*loaded_ides {
-        for ide in unprocessed {
-            if let Some(ide) = assets_ide.get(ide.clone()) {
+    if let LoadedIdes::Unprocessed(ides) = &mut *loaded_ides {
+        ides.retain(|ide| match assets_ide.get(ide.clone()) {
+            Some(ide) => {
                 let mtm = &mut model_texture_map.0;
                 for object in ide.objects.iter() {
                     mtm.insert(object.model_name.clone(), object.texture_name.clone());
@@ -296,9 +296,14 @@ fn process_pending_ides(
                 for weapon in ide.weapons.iter() {
                     mtm.insert(weapon.model_name.clone(), weapon.texture_name.clone());
                 }
-            }
-        }
 
+                false
+            }
+            None => true,
+        });
+
+        if ides.is_empty() {
         *loaded_ides = LoadedIdes::Processed;
+        }
     }
 }
