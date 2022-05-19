@@ -300,38 +300,38 @@ fn process_pending_desired_meshes(
         }
 
         if let Some(dff) = asset_meshes.get(handle.clone()) {
-            let mesh = meshes.add(dff.mesh.clone());
-            let dff_material = dff.materials.get(0);
+            for model in &dff.models {
+                let mesh = meshes.add(model.mesh.clone());
+                let model_material = model.materials.get(0);
 
-            let (base_color, base_color_texture) =
-                match (dff_material, model_texture_map.0.get(&dff.name)) {
-                    (Some(material), Some(name)) => (
-                        Color::rgba_u8(
-                            material.color.r,
-                            material.color.g,
-                            material.color.b,
-                            material.color.a,
-                        ),
-                        Some(asset_server.load(&format!(
+                let base_color = model_material
+                    .map(|m| Color::rgba_u8(m.color.r, m.color.g, m.color.b, m.color.a))
+                    .unwrap_or(Color::WHITE);
+
+                let base_color_texture = model_texture_map
+                    .0
+                    .get(&model.name)
+                    .zip(model_material.and_then(|m| m.texture.as_ref()))
+                    .map(|(name, texture)| {
+                        asset_server.load(&format!(
                             "models/gta3/{}.txd#{}",
                             name.replace("generic", "Generic"),
-                            material.texture.name
-                        ))),
-                    ),
-                    _ => (Color::WHITE, None),
-                };
+                            texture.name
+                        ))
+                    });
 
-            commands.spawn_bundle(PbrBundle {
-                mesh,
-                material: materials.add(StandardMaterial {
-                    base_color,
-                    base_color_texture,
-                    unlit: true,
+                commands.spawn_bundle(PbrBundle {
+                    mesh,
+                    material: materials.add(StandardMaterial {
+                        base_color,
+                        base_color_texture,
+                        unlit: true,
+                        ..default()
+                    }),
+                    transform: *transform,
                     ..default()
-                }),
-                transform: *transform,
-                ..default()
-            });
+                });
+            }
 
             *spawned = true;
         }

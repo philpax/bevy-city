@@ -1,6 +1,6 @@
 use nom::{number::complete as nc, sequence::tuple, IResult};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Triangle {
     pub vertex1: u16,
     pub vertex2: u16,
