@@ -177,48 +177,24 @@ fn handle_dat_events(
     for ev in ev_asset.iter() {
         match ev {
             AssetEvent::Created { handle } if *handle == global_dat.0 => {
-                let mut ides = vec![asset_server.load("data/default.ide")];
-                let mut ipls = vec![];
-
                 let dat = assets.get(handle).unwrap();
-                for (filetype, path) in dat
-                    .0
-                    .lines()
-                    .filter(|l| !(l.trim().is_empty() || l.starts_with('#')))
-                    .filter_map(|l| l.split_once(' '))
-                {
-                    if !path.starts_with("DATA\\MAPS") {
-                        continue;
-                    }
+                let vc_dat = vice_city_formats::dat::parse_gta_vc_dat(&dat.0);
 
-                    let path = path
-                        .replace('\\', "/")
-                        .replace("DATA/MAPS", "data/maps")
-                        .replace(".IDE", ".ide")
-                        .replace(".IPL", ".ipl")
-                        // hack: fix the case on some map IDEs...
-                        .replace("haitin/haitin.ide", "haitiN/haitiN.ide")
-                        .replace("oceandn/oceandn", "oceandn/oceandN")
-                        // hack: fix the case on some map IDLs...
-                        .replace("club.ipl", "CLUB.ipl")
-                        .replace("haitin/haitin.ipl", "haitiN/haitin.ipl");
+                *loaded_ides = LoadedIdes::Unprocessed(
+                    vc_dat
+                        .ides
+                        .iter()
+                        .map(|p| asset_server.load(p.as_str()))
+                        .collect(),
+                );
 
-                    // hack: remove some ipls we don't care for
-                    if path.ends_with("islandsf.ipl") {
-                        continue;
-                    }
-
-                    match filetype {
-                        "IDE" => ides.push(asset_server.load(&path)),
-                        "IPL" => ipls.push(path),
-                        _ => {}
-                    }
-                }
-
-                *loaded_ides = LoadedIdes::Unprocessed(ides);
                 if let PendingIpls::Unloaded = *pending_ipls {
                     *pending_ipls = PendingIpls::Loaded(
-                        ipls.into_iter().map(|p| asset_server.load(&p)).collect(),
+                        vc_dat
+                            .ipls
+                            .iter()
+                            .map(|p| asset_server.load(p.as_str()))
+                            .collect(),
                     );
                 }
             }
@@ -242,7 +218,7 @@ fn handle_ipl_events(
             AssetEvent::Created { handle } => {
                 let ipl = assets.get(handle).unwrap();
 
-                for instance in &ipl.instances {
+                for instance in &ipl.0.instances {
                     if instance.interior != 0 {
                         // We don't support interiors right now!
                         continue;
@@ -347,10 +323,10 @@ fn process_pending_ides(
         ides.retain(|ide| match assets_ide.get(ide.clone()) {
             Some(ide) => {
                 let mtm = &mut model_texture_map.0;
-                for object in ide.objects.iter() {
+                for object in ide.0.objects.iter() {
                     mtm.insert(object.model_name.clone(), object.texture_name.clone());
                 }
-                for weapon in ide.weapons.iter() {
+                for weapon in ide.0.weapons.iter() {
                     mtm.insert(weapon.model_name.clone(), weapon.texture_name.clone());
                 }
 

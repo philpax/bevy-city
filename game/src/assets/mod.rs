@@ -1,7 +1,5 @@
 use bevy::{app::PluginGroupBuilder, prelude::PluginGroup};
 
-mod common;
-
 mod dat;
 mod ide;
 mod ipl;

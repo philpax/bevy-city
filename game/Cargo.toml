@@ -9,6 +9,8 @@ bevy = "0.7"
 bevy_atmosphere = "0.3.0"
 bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git", version = "0.1.0" }
 bevy_flycam = "0.7.0"
-bevy_renderware = { path = "../crates/bevy_renderware" }
 bitflags = "1.3.2"
 clap = { version = "3.1.18", features = ["derive"] }
+
+bevy_renderware = { path = "../crates/bevy_renderware" }
+vice-city-formats = { path = "../crates/vice-city-formats" }
