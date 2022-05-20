@@ -1,4 +1,5 @@
-use glam::{Quat, Vec3};
+use bevy_math::prelude::*;
+use bevy_transform::prelude::*;
 
 #[derive(Debug, PartialEq)]
 pub struct Instance {
@@ -52,6 +53,36 @@ impl Ipl {
             .collect();
 
         Ipl { instances }
+    }
+
+    pub fn extract_supported_instances(&self) -> impl Iterator<Item = (String, Transform)> + '_ {
+        self.instances.iter().filter_map(|instance| {
+            if instance.interior != 0 {
+                // We don't support interiors right now!
+                return None;
+            }
+
+            let name = &instance.model_name;
+            if name.len() > 3 && name[..3].eq_ignore_ascii_case("lod") {
+                return None;
+            }
+
+            let (translation, _rotation, scale) =
+                (instance.position, instance.rotation, instance.scale);
+
+            // HACK(philpax): fix this at some point. I believe the parsed
+            // representation has the elements in the wrong order.
+            let rotation = Default::default();
+
+            Some((
+                format!("models/gta3/{name}.dff"),
+                Transform {
+                    translation,
+                    rotation,
+                    scale,
+                },
+            ))
+        })
     }
 }
 

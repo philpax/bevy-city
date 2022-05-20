@@ -178,7 +178,7 @@ fn handle_dat_events(
         match ev {
             AssetEvent::Created { handle } if *handle == global_dat.0 => {
                 let dat = assets.get(handle).unwrap();
-                let vc_dat = vice_city_formats::dat::parse_gta_vc_dat(&dat.0);
+                let vc_dat = vice_city_formats::dat::GtaVcDat::parse(&dat.0);
 
                 *loaded_ides = LoadedIdes::Unprocessed(
                     vc_dat
@@ -218,35 +218,15 @@ fn handle_ipl_events(
             AssetEvent::Created { handle } => {
                 let ipl = assets.get(handle).unwrap();
 
-                for instance in &ipl.0.instances {
-                    if instance.interior != 0 {
-                        // We don't support interiors right now!
-                        continue;
-                    }
-
-                    let name = &instance.model_name;
-                    if name.len() > 3 && name[..3].eq_ignore_ascii_case("lod") {
-                        continue;
-                    }
-
-                    let model_handle = asset_server.load(&format!("models/gta3/{name}.dff"));
-                    let (translation, _rotation, scale) =
-                        (instance.position, instance.rotation, instance.scale);
-
-                    // HACK(philpax): fix this at some point. I believe the parsed
-                    // representation has the elements in the wrong order.
-                    let rotation = default();
-
-                    desired_asset_meshes.0.push((
-                        model_handle,
-                        Transform {
-                            translation,
-                            rotation,
-                            scale,
-                        },
-                        false,
-                    ));
-                }
+                desired_asset_meshes
+                    .0
+                    .extend(
+                        ipl.0
+                            .extract_supported_instances()
+                            .map(|(model_path, transform)| {
+                                (asset_server.load(&model_path), transform, false)
+                            }),
+                    );
             }
             AssetEvent::Modified { handle: _handle } => {
                 panic!("you aren't meant to modify the IPLs during gameplay!");
@@ -320,16 +300,9 @@ fn process_pending_ides(
     assets_ide: Res<Assets<Ide>>,
 ) {
     if let LoadedIdes::Unprocessed(ides) = &mut *loaded_ides {
-        ides.retain(|ide| match assets_ide.get(ide.clone()) {
+        ides.retain(|ide| match assets_ide.get(ide) {
             Some(ide) => {
-                let mtm = &mut model_texture_map.0;
-                for object in ide.0.objects.iter() {
-                    mtm.insert(object.model_name.clone(), object.texture_name.clone());
-                }
-                for weapon in ide.0.weapons.iter() {
-                    mtm.insert(weapon.model_name.clone(), weapon.texture_name.clone());
-                }
-
+                model_texture_map.0.extend(ide.0.model_to_texture_map());
                 false
             }
             None => true,

@@ -93,6 +93,17 @@ impl Ide {
 
         Ide { objects, weapons }
     }
+
+    pub fn model_to_texture_map(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        Iterator::chain(
+            self.objects
+                .iter()
+                .map(|o| (o.model_name.clone(), o.texture_name.clone())),
+            self.weapons
+                .iter()
+                .map(|w| (w.model_name.clone(), w.texture_name.clone())),
+        )
+    }
 }
 
 fn parse_object(line: &str, is_tobj: bool) -> Object {
