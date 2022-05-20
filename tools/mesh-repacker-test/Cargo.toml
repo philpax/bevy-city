@@ -1,0 +1,11 @@
+[package]
+name = "mesh-repacker-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.57"
+clap = { version = "3.1.18", features = ["derive"] }
+image = "0.24.2"
+renderware-format = { version = "0.1.0", path = "../../crates/renderware-format" }
+vice-city-formats = { version = "0.1.0", path = "../../crates/vice-city-formats" }

@@ -1,14 +1,10 @@
-use std::collections::{HashMap, HashSet};
-
-use itertools::Itertools;
-
 use crate::raw::{
     constants::SectionType, Atomic, BinaryStreamFile, ClumpData, Frame, GeometryData, Section,
 };
 
 pub use crate::raw::{
     constants::{TextureAddressing, TextureFiltering},
-    Color, Lighting, Mat3, Vec3,
+    Color, Lighting, Mat3, Triangle, Vec3,
 };
 
 #[derive(Debug)]
@@ -66,93 +62,34 @@ pub struct Material {
 #[derive(Debug, Clone)]
 pub struct Model {
     pub vertices: Vec<Vertex>,
-    pub indices: Vec<u16>,
+    pub triangles: Vec<Triangle>,
     pub topology: Topology,
     pub materials: Vec<Material>,
+    pub material_indices: Vec<usize>,
 }
 
 impl Model {
-    fn _from_geometry_split(
+    fn from_geometry_split(
         geometry: &crate::raw::Geometry,
         material_list: Option<&crate::raw::Section>,
     ) -> Model {
         let (geometry_data, vertices, topology, materials) =
             extract_mesh_data_from_geometry(geometry, material_list);
 
-        let indices = geometry_data
-            .triangles
-            .iter()
-            .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
-            .collect();
+        let triangles = geometry_data.triangles.clone();
+
+        let (materials, material_indices) = match materials {
+            Some(tup) => tup,
+            None => (vec![], vec![]),
+        };
 
         Model {
             vertices,
-            indices,
+            triangles,
             topology,
-            materials: materials.map(|m| m.0).unwrap_or_default(),
+            materials,
+            material_indices,
         }
-    }
-
-    // HACK(philpax): Bevy doesn't support multiple diffuse materials per mesh,
-    // so we just partition the meshes by material ID. #yolo
-    fn from_geometry_split_by_material(
-        geometry: &crate::raw::Geometry,
-        material_list: Option<&crate::raw::Section>,
-    ) -> Vec<Model> {
-        let (geometry_data, vertices, topology, materials) =
-            extract_mesh_data_from_geometry(geometry, material_list);
-
-        let mut triangles = geometry_data.triangles.clone();
-        triangles.sort_by_key(|t| t.material_id);
-
-        // We want to generate a new model for each group, making sure to extract only what we need.
-        triangles
-            .iter()
-            .group_by(|t| t.material_id)
-            .into_iter()
-            .map(|(material_id, triangles)| {
-                let triangles = triangles.collect_vec();
-                let our_indices = triangles
-                    .iter()
-                    .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect_vec();
-
-                let vertices = our_indices
-                    .iter()
-                    .map(|i| vertices[*i as usize])
-                    .collect_vec();
-
-                let remap_table: HashMap<_, _> = our_indices
-                    .iter()
-                    .enumerate()
-                    .map(|(new_index, old_index)| (*old_index, new_index as u16))
-                    .collect();
-
-                let remap = |idx| *remap_table.get(&idx).unwrap();
-
-                let indices = triangles
-                    .iter()
-                    .flat_map(|t| [remap(t.vertex1), remap(t.vertex2), remap(t.vertex3)])
-                    .collect_vec();
-
-                let materials = if let Some((materials, indices)) = &materials {
-                    let material_index = indices[material_id as usize] as usize;
-                    let material = materials[material_index].clone();
-                    vec![material]
-                } else {
-                    vec![]
-                };
-
-                Model {
-                    vertices,
-                    indices,
-                    topology,
-                    materials,
-                }
-            })
-            .collect()
     }
 
     // todo: replace all the panics with errors
@@ -203,10 +140,11 @@ impl Model {
 
         atomics
             .map(|(frame_index, geometry_index)| (&frames[frame_index], geometries[geometry_index]))
-            .flat_map(|(frame, (geometry, material_list))| {
-                Model::from_geometry_split_by_material(geometry, material_list)
-                    .into_iter()
-                    .map(|model| (frame.into(), model))
+            .map(|(frame, (geometry, material_list))| {
+                (
+                    frame.into(),
+                    Model::from_geometry_split(geometry, material_list),
+                )
             })
             .collect()
     }
@@ -219,7 +157,7 @@ fn extract_mesh_data_from_geometry<'a>(
     &'a GeometryData,
     Vec<Vertex>,
     Topology,
-    Option<(Vec<Material>, Vec<i32>)>,
+    Option<(Vec<Material>, Vec<usize>)>,
 ) {
     let geometry_data = geometry.data.as_ref().expect("no geometry data");
     let morph_target = &geometry.morph_targets[0];

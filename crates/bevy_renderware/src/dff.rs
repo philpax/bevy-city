@@ -89,7 +89,13 @@ fn rwf_model_to_bevy_model(model: &rwf::dff::Model, path: &Path) -> Model {
         vertices.iter().map(|v| v.normal.as_array()).collect(),
     );
     set_uv_data(&mut mesh, vertices.iter().map(|v| v.uv).collect());
-    mesh.set_indices(Some(Indices::U16(model.indices.clone())));
+    mesh.set_indices(Some(Indices::U16(
+        model
+            .triangles
+            .iter()
+            .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
+            .collect(),
+    )));
 
     let name = path
         .file_stem()
