@@ -150,15 +150,17 @@ impl Model {
     }
 }
 
-fn extract_mesh_data_from_geometry<'a>(
-    geometry: &'a crate::raw::Geometry,
-    material_list: Option<&Section>,
-) -> (
+type MeshData<'a> = (
     &'a GeometryData,
     Vec<Vertex>,
     Topology,
     Option<(Vec<Material>, Vec<usize>)>,
-) {
+);
+
+fn extract_mesh_data_from_geometry<'a>(
+    geometry: &'a crate::raw::Geometry,
+    material_list: Option<&Section>,
+) -> MeshData<'a> {
     let geometry_data = geometry.data.as_ref().expect("no geometry data");
     let morph_target = &geometry.morph_targets[0];
     let texture_set = if geometry_data.texture_sets.is_empty() {

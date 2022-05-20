@@ -14,7 +14,7 @@ use tp::texture::{
 
 pub fn repack_model(
     model: &dff::Model,
-    textures: &Vec<txd::Texture>,
+    textures: &[txd::Texture],
 ) -> (Vec<dff::Vertex>, Vec<dff::Triangle>, txd::Texture) {
     // Sort our materials so that the smallest is added to the packer first.
     let texture_data_by_name: HashMap<_, _> =
@@ -113,10 +113,12 @@ pub fn repack_model(
     (vertices, triangles, texture)
 }
 
+type UvRemapBounds = ((f32, f32), (f32, f32));
+
 fn generate_submeshes_by_material_id(
     vertices: &[dff::Vertex],
     triangles: &[dff::Triangle],
-    remap_bounds_by_material_id: &HashMap<u16, ((f32, f32), (f32, f32))>,
+    remap_bounds_by_material_id: &HashMap<u16, UvRemapBounds>,
 ) -> Vec<(Vec<Vertex>, Vec<dff::Triangle>)> {
     let mut triangles = triangles.to_vec();
     triangles.sort_by_key(|t| t.material_id);
@@ -134,7 +136,7 @@ fn generate_submeshes_by_material_id(
 fn generate_submesh<'a>(
     vertices: &[dff::Vertex],
     triangles: impl Iterator<Item = &'a dff::Triangle>,
-    remap_bounds: Option<((f32, f32), (f32, f32))>,
+    remap_bounds: Option<UvRemapBounds>,
 ) -> (Vec<Vertex>, Vec<dff::Triangle>) {
     // thank you stack overflow
     // https://stackoverflow.com/a/3451607
@@ -200,7 +202,7 @@ fn material_to_texture_data(
             .data
             .chunks_exact(4)
             .flat_map(|col| {
-                buf.copy_from_slice(&col);
+                buf.copy_from_slice(col);
                 let tex_color = apply_to_vec4(buf, remap_c_to_f32);
                 apply_to_vec4(
                     [
