@@ -1,3 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
+use itertools::Itertools;
+
 use crate::raw::{
     constants::SectionType, Atomic, BinaryStreamFile, ClumpData, Frame, GeometryData, Section,
 };
@@ -26,13 +30,15 @@ pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub uv: [f32; 2],
+    pub material_id: u16,
 }
 impl Vertex {
-    pub fn new(position: Vec3, normal: Vec3, uv: [f32; 2]) -> Self {
+    pub fn new(position: Vec3, normal: Vec3, uv: [f32; 2], material_id: u16) -> Self {
         Self {
             position,
             normal,
             uv,
+            material_id,
         }
     }
 }
@@ -62,33 +68,108 @@ pub struct Material {
 #[derive(Debug, Clone)]
 pub struct Model {
     pub vertices: Vec<Vertex>,
-    pub triangles: Vec<Triangle>,
+    pub indices: Vec<u16>,
     pub topology: Topology,
     pub materials: Vec<Material>,
     pub material_indices: Vec<usize>,
 }
 
 impl Model {
-    fn from_geometry_split(
+    fn from_geometry_split_no_split(
         geometry: &crate::raw::Geometry,
         material_list: Option<&crate::raw::Section>,
     ) -> Model {
         let (geometry_data, vertices, topology, materials) =
             extract_mesh_data_from_geometry(geometry, material_list);
 
-        let triangles = geometry_data.triangles.clone();
-
-        let (materials, material_indices) = match materials {
-            Some(tup) => tup,
-            None => (vec![], vec![]),
-        };
+        let indices = geometry_data
+            .triangles
+            .iter()
+            .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
+            .collect();
+        let (materials, material_indices) = materials.unwrap_or_default();
 
         Model {
             vertices,
-            triangles,
+            indices,
             topology,
             materials,
             material_indices,
+        }
+    }
+
+    // HACK(philpax): Bevy doesn't support multiple diffuse materials per mesh,
+    // so we just partition the meshes by material ID and stitch them back together. #yolo
+    fn from_geometry_split_by_material(
+        geometry: &crate::raw::Geometry,
+        material_list: Option<&crate::raw::Section>,
+    ) -> Model {
+        let (geometry_data, vertices, topology, materials) =
+            extract_mesh_data_from_geometry(geometry, material_list);
+
+        let mut triangles = geometry_data.triangles.clone();
+        triangles.sort_by_key(|t| t.material_id);
+
+        let mut final_vertices = vec![];
+        let mut final_indices = vec![];
+        for (material_id, triangles) in triangles
+            .into_iter()
+            .group_by(|t| t.material_id)
+            .into_iter()
+        {
+            let triangles = triangles.collect_vec();
+
+            // indices used by this submesh; the indices correspond to vertices of the original mesh
+            let our_indices = triangles
+                .iter()
+                .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect_vec();
+
+            // generate a map between original mesh indices and indices in our concatenated submesh
+            let remap_table: HashMap<_, _> = our_indices
+                .iter()
+                .enumerate()
+                .map(|(new_index, old_index)| {
+                    (*old_index, (new_index + final_vertices.len()) as u16)
+                })
+                .collect();
+            let remap = |idx| *remap_table.get(&idx).unwrap();
+
+            // extend our concatenated submeshes' vertices with the vertices used by this submesh
+            final_vertices.extend(our_indices.iter().map(|i| Vertex {
+                material_id,
+                ..vertices[*i as usize]
+            }));
+
+            // extend our concatenated submeshes' indices with the indices used by this submesh,
+            // taking care to remap them to their new location within the mesh
+            final_indices.extend(
+                triangles
+                    .iter()
+                    .flat_map(|t| [remap(t.vertex1), remap(t.vertex2), remap(t.vertex3)]),
+            );
+        }
+
+        let (materials, material_indices) = materials.unwrap_or_default();
+        Model {
+            vertices: final_vertices,
+            indices: final_indices,
+            topology,
+            materials,
+            material_indices,
+        }
+    }
+
+    fn from_geometry_split(
+        geometry: &crate::raw::Geometry,
+        material_list: Option<&crate::raw::Section>,
+    ) -> Model {
+        if cfg!(feature = "use-single-mesh") {
+            Self::from_geometry_split_no_split(geometry, material_list)
+        } else {
+            Self::from_geometry_split_by_material(geometry, material_list)
         }
     }
 
@@ -183,7 +264,7 @@ fn extract_mesh_data_from_geometry<'a>(
         .iter()
         .zip(normals.iter())
         .zip(texture_set.iter())
-        .map(|((position, normal), uv)| Vertex::new(*position, *normal, *uv))
+        .map(|((position, normal), uv)| Vertex::new(*position, *normal, *uv, 0))
         .collect();
 
     // HACK(philpax): for some reason, we only get correct rendering with triangle list

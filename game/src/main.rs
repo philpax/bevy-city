@@ -64,6 +64,7 @@ fn main() -> anyhow::Result<()> {
         })
         .add_plugins(DefaultPlugins)
         .add_plugins(assets::ViceCityPluginGroup)
+        .add_plugin(RenderPlugin)
         .add_plugin(EditorPlugin)
         .insert_resource(DesiredAssetMeshes(vec![]))
         .insert_resource(LoadedIdes::Unloaded)
@@ -144,9 +145,9 @@ fn asset_viewer(
 fn load_maps(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<GtaMaterial>>,
 ) {
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn_bundle(GtaBundle {
         mesh: meshes.add(Mesh::from(shape::Plane {
             size: EXTERIOR_MAP_SIZE * 2.0,
         })),
@@ -239,7 +240,7 @@ fn handle_ipl_events(
 
 fn process_pending_desired_meshes(
     mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<GtaMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
     loaded_ides: Res<LoadedIdes>,
@@ -277,11 +278,12 @@ fn process_pending_desired_meshes(
                         ))
                     });
 
-                commands.spawn_bundle(PbrBundle {
+                commands.spawn_bundle(GtaBundle {
                     mesh,
-                    material: materials.add(StandardMaterial {
+                    material: materials.add(GtaMaterial {
                         base_color,
                         base_color_texture,
+                        materials: model.materials.clone(),
                         unlit: true,
                         ..default()
                     }),
