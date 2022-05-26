@@ -88,6 +88,8 @@ fn rwf_model_to_bevy_model(model: &rwf::dff::Model, path: &Path) -> Model {
             .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
             .collect(),
     )));
+    mesh.duplicate_vertices();
+    mesh.compute_flat_normals();
 
     let name = path
         .file_stem()
