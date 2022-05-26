@@ -239,9 +239,9 @@ dependencies = [
  "bevy_atmosphere",
  "bevy_editor_pls",
  "bevy_flycam",
- "bevy_renderware",
  "bitflags",
  "clap",
+ "renderware-format",
  "vice-city-formats",
 ]
 
@@ -764,20 +764,6 @@ dependencies = [
  "smallvec",
  "thiserror",
  "wgpu",
-]
-
-[[package]]
-name = "bevy_renderware"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bevy_app",
- "bevy_asset",
- "bevy_reflect",
- "bevy_render",
- "bevy_utils",
- "renderware-format",
- "thiserror",
 ]
 
 [[package]]

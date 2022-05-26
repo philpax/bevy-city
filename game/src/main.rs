@@ -13,12 +13,14 @@ use bevy_editor_pls::{
     prelude::*,
 };
 use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
-use bevy_renderware::dff::Dff;
 
 use clap::Parser;
 
 pub mod assets;
-use assets::{Dat, Ide, Ipl};
+use assets::{Dat, Dff, Ide, Ipl};
+
+pub mod render;
+use render::*;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -61,7 +63,6 @@ fn main() -> anyhow::Result<()> {
             ..default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugin(bevy_renderware::RwPlugin)
         .add_plugins(assets::ViceCityPluginGroup)
         .add_plugin(EditorPlugin)
         .insert_resource(DesiredAssetMeshes(vec![]))

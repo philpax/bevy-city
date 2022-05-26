@@ -1,23 +1,23 @@
-use bevy_asset::{AssetLoader, LoadContext, LoadedAsset};
-use bevy_render::{
-    render_resource::{Extent3d, TextureDimension, TextureFormat},
-    texture::Image,
+use bevy::{
+    asset::{AssetLoader, LoadContext, LoadedAsset},
+    prelude::*,
+    render::{
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        texture::Image,
+    },
+    utils::BoxedFuture,
 };
-use bevy_utils::BoxedFuture;
-
-use anyhow::Result;
-use thiserror::Error;
 
 use renderware_format as rwf;
 
 #[derive(Default)]
-pub struct Loader;
+pub struct TxdLoader;
 
-impl AssetLoader for Loader {
+impl AssetLoader for TxdLoader {
     fn load<'a>(
         &'a self,
         bytes: &'a [u8],
-        load_context: &'a mut bevy_asset::LoadContext,
+        load_context: &'a mut bevy::asset::LoadContext,
     ) -> BoxedFuture<'a, anyhow::Result<()>> {
         Box::pin(async move { Ok(load_txd(bytes, load_context).await?) })
     }
@@ -28,18 +28,10 @@ impl AssetLoader for Loader {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum RwError {
-    #[error("Invalid RW file: {0}")]
-    Rw(#[from] rwf::raw::Error),
-    #[error("Unknown vertex format")]
-    UnknownVertexFormat,
-}
-
 async fn load_txd<'a, 'b>(
     bytes: &'a [u8],
     load_context: &'a mut LoadContext<'b>,
-) -> Result<(), RwError> {
+) -> anyhow::Result<()> {
     let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
     let textures = rwf::txd::Texture::from_raw(&raw);
 
@@ -56,8 +48,8 @@ async fn load_txd<'a, 'b>(
         );
 
         let remap_addressing =
-            |addressing: rwf::txd::TextureAddressing| -> bevy_render::render_resource::AddressMode {
-                use bevy_render::render_resource::AddressMode;
+            |addressing: rwf::txd::TextureAddressing| -> bevy::render::render_resource::AddressMode {
+                use bevy::render::render_resource::AddressMode;
                 use rwf::txd::TextureAddressing;
 
                 match addressing {
@@ -75,4 +67,12 @@ async fn load_txd<'a, 'b>(
     }
 
     Ok(())
+}
+
+#[derive(Default)]
+pub struct TxdPlugin;
+impl Plugin for TxdPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_asset_loader::<TxdLoader>();
+    }
 }

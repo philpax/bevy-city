@@ -1,27 +1,27 @@
 use std::path::Path;
 
-use bevy_asset::{AssetLoader, LoadContext, LoadedAsset};
-use bevy_reflect::TypeUuid;
-use bevy_render::{
-    mesh::{Indices, Mesh},
-    render_resource::PrimitiveTopology,
+use bevy::{
+    asset::{AssetLoader, LoadContext, LoadedAsset},
+    prelude::*,
+    reflect::TypeUuid,
+    render::{
+        mesh::{Indices, Mesh},
+        render_resource::PrimitiveTopology,
+    },
+    utils::BoxedFuture,
 };
-use bevy_utils::BoxedFuture;
-
-use anyhow::Result;
-use thiserror::Error;
 
 use renderware_format as rwf;
 use rwf::dff::Vec3;
 
 #[derive(Default)]
-pub struct Loader;
+pub struct DffLoader;
 
-impl AssetLoader for Loader {
+impl AssetLoader for DffLoader {
     fn load<'a>(
         &'a self,
         bytes: &'a [u8],
-        load_context: &'a mut bevy_asset::LoadContext,
+        load_context: &'a mut bevy::asset::LoadContext,
     ) -> BoxedFuture<'a, anyhow::Result<()>> {
         Box::pin(async move { Ok(load_dff(bytes, load_context).await?) })
     }
@@ -30,14 +30,6 @@ impl AssetLoader for Loader {
         static EXTENSIONS: &[&str] = &["dff"];
         EXTENSIONS
     }
-}
-
-#[derive(Error, Debug)]
-pub enum RwError {
-    #[error("Invalid RW file: {0}")]
-    Rw(#[from] rwf::raw::Error),
-    #[error("Unknown vertex format")]
-    UnknownVertexFormat,
 }
 
 pub struct Model {
@@ -55,7 +47,7 @@ pub struct Dff {
 async fn load_dff<'a, 'b>(
     bytes: &'a [u8],
     load_context: &'a mut LoadContext<'b>,
-) -> Result<(), RwError> {
+) -> anyhow::Result<()> {
     let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
     let models = rwf::dff::Model::from_raw(&raw);
 
@@ -121,4 +113,12 @@ fn set_normal_data(mesh: &mut Mesh, data: Vec<[f32; 3]>) {
 
 fn set_uv_data(mesh: &mut Mesh, data: Vec<[f32; 2]>) {
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, data);
+}
+
+#[derive(Default)]
+pub struct DffPlugin;
+impl Plugin for DffPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_asset::<Dff>().init_asset_loader::<DffLoader>();
+    }
 }
