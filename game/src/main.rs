@@ -171,35 +171,35 @@ fn handle_dat_events(
     mut ev_asset: EventReader<AssetEvent<Dat>>,
     mut loaded_ides: ResMut<LoadedIdes>,
     mut pending_ipls: ResMut<PendingIpls>,
-    global_dat: Res<GlobalDat>,
     asset_server: Res<AssetServer>,
     assets: Res<Assets<Dat>>,
 ) {
     for ev in ev_asset.iter() {
         match ev {
-            AssetEvent::Created { handle } if *handle == global_dat.0 => {
+            AssetEvent::Created { handle } => {
                 let dat = assets.get(handle).unwrap();
-                let vc_dat = vice_city_formats::dat::GtaVcDat::parse(&dat.0);
+                match dat {
+                    Dat::GtaVcDat(vc_dat) => {
+                        *loaded_ides = LoadedIdes::Unprocessed(
+                            vc_dat
+                                .ides
+                                .iter()
+                                .map(|p| asset_server.load(p.as_str()))
+                                .collect(),
+                        );
 
-                *loaded_ides = LoadedIdes::Unprocessed(
-                    vc_dat
-                        .ides
-                        .iter()
-                        .map(|p| asset_server.load(p.as_str()))
-                        .collect(),
-                );
-
-                if let PendingIpls::Unloaded = *pending_ipls {
-                    *pending_ipls = PendingIpls::Loaded(
-                        vc_dat
-                            .ipls
-                            .iter()
-                            .map(|p| asset_server.load(p.as_str()))
-                            .collect(),
-                    );
+                        if let PendingIpls::Unloaded = *pending_ipls {
+                            *pending_ipls = PendingIpls::Loaded(
+                                vc_dat
+                                    .ipls
+                                    .iter()
+                                    .map(|p| asset_server.load(p.as_str()))
+                                    .collect(),
+                            );
+                        }
+                    }
                 }
             }
-            AssetEvent::Created { .. } => {}
             AssetEvent::Modified { handle: _handle } => {
                 panic!("you aren't meant to modify the DATs during gameplay!");
             }

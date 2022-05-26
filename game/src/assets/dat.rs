@@ -4,10 +4,13 @@ use bevy::{
     reflect::TypeUuid,
     utils::BoxedFuture,
 };
+use vice_city_formats::dat::GtaVcDat;
 
 #[derive(Debug, TypeUuid, PartialEq)]
 #[uuid = "95f9b96b-326e-4479-8341-0b45c83ead25"]
-pub struct Dat(pub String);
+pub enum Dat {
+    GtaVcDat(GtaVcDat),
+}
 
 #[derive(Default)]
 pub struct DatLoader;
@@ -19,8 +22,17 @@ impl AssetLoader for DatLoader {
         load_context: &'a mut bevy::asset::LoadContext,
     ) -> BoxedFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {
-            let value = Dat(std::str::from_utf8(bytes).unwrap().to_owned());
-            load_context.set_default_asset(LoadedAsset::new(value));
+            if load_context
+                .path()
+                .file_name()
+                .map(|s| s != "gta_vc.dat")
+                .unwrap_or(true)
+            {
+                panic!("unsupported dat `{:?}`!", load_context.path());
+            }
+            let contents = std::str::from_utf8(bytes).unwrap().to_owned();
+            load_context
+                .set_default_asset(LoadedAsset::new(Dat::GtaVcDat(GtaVcDat::parse(&contents))));
             Ok(())
         })
     }
