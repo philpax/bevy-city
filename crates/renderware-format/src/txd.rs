@@ -5,7 +5,7 @@ pub use crate::raw::{
     Color,
 };
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Texture {
     pub filtering: TextureFiltering,
     pub uv: (TextureAddressing, TextureAddressing),

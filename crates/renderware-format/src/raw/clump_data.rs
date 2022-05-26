@@ -5,7 +5,7 @@ use num_traits::FromPrimitive;
 
 use super::{constants::*, Color, Frame, GeometryData, Lighting, MorphTarget, UnparsedData};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Texture {
     pub filtering: TextureFiltering,
     pub uv: (TextureAddressing, TextureAddressing),
@@ -27,14 +27,14 @@ pub struct Geometry {
     pub morph_targets: Vec<MorphTarget>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Clump {
     pub atomic_count: u32,
     pub light_count: u32,
     pub camera_count: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Atomic {
     pub frame_index: u32,
     pub geometry_index: u32,
@@ -42,7 +42,7 @@ pub struct Atomic {
     pub render: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Raster {
     pub filtering: TextureFiltering,
     pub uv: (TextureAddressing, TextureAddressing),
@@ -63,7 +63,7 @@ pub struct Raster {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TextureDictionary {
     pub texture_count: u32,
     pub device_id: Option<u16>,

@@ -19,7 +19,7 @@ impl AssetLoader for TxdLoader {
         bytes: &'a [u8],
         load_context: &'a mut bevy::asset::LoadContext,
     ) -> BoxedFuture<'a, anyhow::Result<()>> {
-        Box::pin(async move { Ok(load_txd(bytes, load_context).await?) })
+        Box::pin(async move { load_txd(bytes, load_context).await })
     }
 
     fn extensions(&self) -> &[&str] {

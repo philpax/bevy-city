@@ -6,7 +6,7 @@ use bevy::{
 };
 use vice_city_formats::dat::GtaVcDat;
 
-#[derive(Debug, TypeUuid, PartialEq)]
+#[derive(Debug, TypeUuid, PartialEq, Eq)]
 #[uuid = "95f9b96b-326e-4479-8341-0b45c83ead25"]
 pub enum Dat {
     GtaVcDat(GtaVcDat),

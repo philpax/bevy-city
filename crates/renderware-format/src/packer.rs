@@ -59,7 +59,9 @@ pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> t
 
     // Finally, generate our texture, and return!
     let base_texture = &textures[0];
-    let texture = txd::Texture {
+    
+
+    txd::Texture {
         filtering: base_texture.filtering,
         uv: base_texture.uv,
         name: String::new(),
@@ -67,9 +69,7 @@ pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> t
         width: width.try_into().unwrap(),
         height: height.try_into().unwrap(),
         data: new_texture_data,
-    };
-
-    texture
+    }
 }
 
 fn material_to_texture_data(
