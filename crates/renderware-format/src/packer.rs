@@ -78,7 +78,7 @@ fn material_to_texture_data(
     let base_color = material.color;
     if let Some(texture) = &material.texture {
         let texture = texture_data_by_name.get(&texture.name).unwrap();
-        let base_color = apply_to_vec4(base_color.as_array(), remap_c_to_f32);
+        let base_color = apply_to_vec4(base_color.as_array(), remap_u8_to_f32);
 
         let mut buf: [u8; 4] = [0; 4];
         let data: Vec<_> = texture
@@ -86,7 +86,7 @@ fn material_to_texture_data(
             .chunks_exact(4)
             .flat_map(|col| {
                 buf.copy_from_slice(col);
-                let tex_color = apply_to_vec4(buf, remap_c_to_f32);
+                let tex_color = apply_to_vec4(buf, remap_u8_to_f32);
                 apply_to_vec4(
                     [
                         tex_color[0] * base_color[0],
@@ -94,7 +94,7 @@ fn material_to_texture_data(
                         tex_color[2] * base_color[2],
                         tex_color[3] * base_color[3],
                     ],
-                    remap_f32_to_c,
+                    remap_f32_to_u8,
                 )
             })
             .collect();
@@ -113,11 +113,11 @@ fn material_to_texture_data(
     }
 }
 
-fn remap_c_to_f32(c: u8) -> f32 {
+fn remap_u8_to_f32(c: u8) -> f32 {
     c as f32 / 255.0
 }
 
-fn remap_f32_to_c(c: f32) -> u8 {
+fn remap_f32_to_u8(c: f32) -> u8 {
     (c * 255.0) as u8
 }
 
