@@ -59,7 +59,6 @@ pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> t
 
     // Finally, generate our texture, and return!
     let base_texture = &textures[0];
-    
 
     txd::Texture {
         filtering: base_texture.filtering,
