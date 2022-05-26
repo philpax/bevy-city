@@ -1,21 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
-    dff::{self, Vertex},
+    dff::{self},
     txd,
 };
 
-use itertools::Itertools;
 use texture_packer as tp;
 use tp::texture::{
     memory_rgba8_texture::{MemoryRGBA8Texture, RGBA8},
     Texture,
 };
 
-pub fn repack_model(
-    model: &dff::Model,
-    textures: &[txd::Texture],
-) -> (Vec<dff::Vertex>, Vec<dff::Triangle>, txd::Texture) {
+pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> txd::Texture {
     // Sort our materials so that the smallest is added to the packer first.
     let texture_data_by_name: HashMap<_, _> =
         textures.iter().map(|t| (t.name.clone(), t)).collect();
@@ -61,43 +57,6 @@ pub fn repack_model(
         }
     }
 
-    // Build a UV remap table for each material ID.
-    let remap_bounds_by_material_id: HashMap<_, _> = packer
-        .get_frames()
-        .iter()
-        .map(|(material_id, frame)| {
-            let tp::Rect { x, y, w, h } = frame.frame;
-            let (x0, x1) = (x as f32, (x + w) as f32);
-            let (y0, y1) = (y as f32, (y + h) as f32);
-
-            let w = width as f32;
-            let h = height as f32;
-            (*material_id, ((x0 / w, x1 / w), (y0 / h, y1 / h)))
-        })
-        .collect();
-
-    // Extract submeshes, grouped by material ID. These submeshes are then combined
-    // to produce our final repacked model.
-    let submeshes = generate_submeshes_by_material_id(
-        &model.vertices,
-        &model.triangles,
-        &remap_bounds_by_material_id,
-    );
-
-    // Concatenate our submeshes.
-    let mut vertices = vec![];
-    let mut triangles = vec![];
-    for submesh in submeshes {
-        let base = vertices.len() as u16;
-        vertices.extend_from_slice(&submesh.0);
-        triangles.extend(submesh.1.iter().map(|t| dff::Triangle {
-            vertex1: base + t.vertex1,
-            vertex2: base + t.vertex2,
-            vertex3: base + t.vertex3,
-            material_id: t.material_id,
-        }));
-    }
-
     // Finally, generate our texture, and return!
     let base_texture = &textures[0];
     let texture = txd::Texture {
@@ -110,82 +69,7 @@ pub fn repack_model(
         data: new_texture_data,
     };
 
-    (vertices, triangles, texture)
-}
-
-type UvRemapBounds = ((f32, f32), (f32, f32));
-
-fn generate_submeshes_by_material_id(
-    vertices: &[dff::Vertex],
-    triangles: &[dff::Triangle],
-    remap_bounds_by_material_id: &HashMap<u16, UvRemapBounds>,
-) -> Vec<(Vec<Vertex>, Vec<dff::Triangle>)> {
-    let mut triangles = triangles.to_vec();
-    triangles.sort_by_key(|t| t.material_id);
-    triangles
-        .iter()
-        .group_by(|t| t.material_id)
-        .into_iter()
-        .map(|(material_id, triangles)| {
-            let remap_bounds = remap_bounds_by_material_id.get(&material_id).copied();
-            generate_submesh(vertices, triangles, remap_bounds)
-        })
-        .collect()
-}
-
-fn generate_submesh<'a>(
-    vertices: &[dff::Vertex],
-    triangles: impl Iterator<Item = &'a dff::Triangle>,
-    remap_bounds: Option<UvRemapBounds>,
-) -> (Vec<Vertex>, Vec<dff::Triangle>) {
-    // thank you stack overflow
-    // https://stackoverflow.com/a/3451607
-    let remap =
-        |value, low1, high1, low2, high2| low2 + (value - low1) * (high2 - low2) / (high1 - low1);
-    let remap_01 = |value: f32, (low, high)| remap(value.clamp(0.0, 1.0), 0.0, 1.0, low, high);
-
-    let triangles = triangles.collect_vec();
-    let remap_bounds = remap_bounds.unwrap_or(((0.0, 1.0), (0.0, 1.0)));
-
-    let our_indices = triangles
-        .iter()
-        .flat_map(|t| [t.vertex1, t.vertex2, t.vertex3])
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect_vec();
-
-    let vertices = our_indices
-        .iter()
-        .map(|i| {
-            let vertex = vertices[*i as usize];
-            Vertex {
-                uv: [
-                    remap_01(vertex.uv[0], remap_bounds.0),
-                    remap_01(vertex.uv[1], remap_bounds.1),
-                ],
-                ..vertex
-            }
-        })
-        .collect_vec();
-
-    let remap_index_table: HashMap<_, _> = our_indices
-        .iter()
-        .enumerate()
-        .map(|(new_index, old_index)| (*old_index, new_index as u16))
-        .collect();
-    let remap_index = |idx| *remap_index_table.get(&idx).unwrap();
-
-    let triangles = triangles
-        .iter()
-        .map(|t| dff::Triangle {
-            vertex1: remap_index(t.vertex1),
-            vertex2: remap_index(t.vertex2),
-            vertex3: remap_index(t.vertex3),
-            material_id: 0,
-        })
-        .collect_vec();
-
-    (vertices, triangles)
+    texture
 }
 
 fn material_to_texture_data(

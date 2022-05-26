@@ -50,21 +50,7 @@ fn main() -> anyhow::Result<()> {
 
     fs::create_dir_all(&args.output)?;
     for (index, (_, model)) in models.iter().enumerate() {
-        let (vertices, triangles, texture) = rwf::packer::repack_model(model, &textures);
-
-        let model_output_path = args.output.join(format!("{}_{}.model", file_stem, index));
-        {
-            use std::io::Write;
-            let mut file = std::fs::File::create(model_output_path)?;
-            writeln!(file, "vertices")?;
-            for vertex in vertices {
-                writeln!(file, "{:?}", vertex)?;
-            }
-            writeln!(file, "triangles")?;
-            for triangle in triangles {
-                writeln!(file, "{:?}", triangle)?;
-            }
-        }
+        let texture = rwf::packer::repack_model_textures(model, &textures);
 
         let texture_output_path = args.output.join(format!("{}_{}.png", file_stem, index));
         image::save_buffer(
