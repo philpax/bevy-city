@@ -4,7 +4,7 @@ use bevy_transform::prelude::*;
 #[derive(Debug, PartialEq)]
 pub struct Instance {
     pub model_name: String,
-    pub interior: u32,
+    pub interior: i32,
     pub position: Vec3,
     pub scale: Vec3,
     pub rotation: Quat,
