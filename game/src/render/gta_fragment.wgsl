@@ -36,6 +36,8 @@
 #import bevy_pbr::mesh_struct
 #import gta::common
 
+const SUBMATERIAL_MAX_COUNT = 64;
+
 [[group(2), binding(0)]]
 var<uniform> mesh: Mesh;
 
@@ -54,7 +56,7 @@ struct GtaMaterial {
     flags: u32;
     alpha_cutoff: f32;
     submaterial_count: u32;
-    submaterials: array<SubmaterialData, 32>;
+    submaterials: array<SubmaterialData, SUBMATERIAL_MAX_COUNT>;
 };
 
 let GTA_MATERIAL_FLAGS_BASE_COLOR_TEXTURE_BIT: u32         = 1u;

@@ -20,7 +20,7 @@ use bevy::{
     },
 };
 
-pub const SUBMATERIAL_MAX_COUNT: usize = 32;
+pub const SUBMATERIAL_MAX_COUNT: usize = 64;
 
 /// A material with "standard" properties used in PBR lighting
 /// Standard property values with pictures here
@@ -129,7 +129,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Default, AsStd140)]
+#[derive(Copy, Clone, Default, AsStd140)]
 pub struct GtaMaterialSubmaterialData {
     pub color: Vec4,
     pub uv_top_left: Vec2,
@@ -137,7 +137,7 @@ pub struct GtaMaterialSubmaterialData {
 }
 
 /// The GPU representation of the uniform data of a [`GtaMaterial`].
-#[derive(Clone, Default, AsStd140)]
+#[derive(Clone, AsStd140)]
 pub struct GtaMaterialUniformData {
     // Use a color for user friendliness even though we technically don't use the alpha channel
     // Might be used in the future for exposure correction in HDR
@@ -294,7 +294,7 @@ impl RenderAsset for GtaMaterial {
             flags: flags.bits(),
             alpha_cutoff,
             submaterial_count: submaterials.len() as u32,
-            submaterials: Default::default(),
+            submaterials: [Default::default(); SUBMATERIAL_MAX_COUNT],
         };
         for (idx, submaterial) in submaterials.iter().enumerate() {
             let c = submaterial.color;
