@@ -150,9 +150,9 @@ fn asset_viewer(
 fn load_maps(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<GtaMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn_bundle(GtaBundle {
+    commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane {
             size: EXTERIOR_MAP_SIZE * 2.0,
         })),
