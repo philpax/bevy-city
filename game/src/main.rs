@@ -310,12 +310,13 @@ fn attempt_to_spawn_dff(
 ) -> Option<Vec<GtaBundle>> {
     // If this model has an associated texture, load the texture.
     // If the texture is not loaded yet, do not attempt to spawn this model, and try again later.
-    let texture_handle: Option<Handle<Txd>> = model_texture_map.0.get(&dff.name).map(|name| {
-        asset_server.load(&format!(
-            "models/gta3/{}.txd",
-            name.replace("generic", "Generic")
-        ))
-    });
+    let texture_path = model_texture_map
+        .0
+        .get(&dff.name)
+        .map(|name| format!("models/gta3/{}.txd", name.replace("generic", "Generic")));
+    let texture_handle: Option<Handle<Txd>> = texture_path
+        .as_ref()
+        .map(|path| asset_server.load(path.as_str()));
     let txd = match texture_handle {
         Some(handle) => match asset_txds.get(handle) {
             Some(txd) => Some(txd),
@@ -334,6 +335,20 @@ fn attempt_to_spawn_dff(
                     &txd.textures,
                 )
             });
+
+            if packed_texture
+                .as_ref()
+                .map(|pt| pt.frames.len())
+                .unwrap_or_default()
+                > render::gta_material::SUBMATERIAL_MAX_COUNT
+            {
+                panic!(
+                    "the dff {}.dff ({}) exceeds the submaterial count with {}",
+                    dff.name,
+                    texture_path.as_ref().unwrap_or(&String::new()),
+                    packed_texture.unwrap().frames.len()
+                );
+            }
 
             gta_materials.add(GtaMaterial {
                 base_color_texture: packed_texture
