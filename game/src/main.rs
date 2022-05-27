@@ -79,7 +79,12 @@ fn main() -> anyhow::Result<()> {
 
     // Primary behaviour
     if let Some(path) = args.path {
-        let path = DesiredAssetRenderPath(path.strip_prefix("assets/")?.into());
+        let path = DesiredAssetRenderPath(
+            path.strip_prefix("./")
+                .unwrap_or(&path)
+                .strip_prefix("assets/")?
+                .into(),
+        );
         app.insert_resource(PendingIpls::NoneRequested)
             .insert_resource(path)
             .add_startup_system(asset_viewer);
