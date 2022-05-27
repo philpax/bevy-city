@@ -50,7 +50,11 @@ fn main() -> anyhow::Result<()> {
 
     fs::create_dir_all(&args.output)?;
     for (index, (_, model)) in models.iter().enumerate() {
-        let texture = rwf::packer::repack_model_textures(model, &textures);
+        let texture = rwf::packer::repack_model_textures(
+            &model.materials,
+            &model.material_indices,
+            &textures,
+        );
 
         let texture_output_path = args.output.join(format!("{}_{}.png", file_stem, index));
         image::save_buffer(

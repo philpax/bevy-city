@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    dff::{self},
-    txd,
-};
+use crate::{dff, txd};
 
 use texture_packer as tp;
 use tp::texture::{
@@ -11,18 +8,35 @@ use tp::texture::{
     Texture,
 };
 
-pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> txd::Texture {
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Frame {
+    pub top_left: (f32, f32),
+    pub bottom_right: (f32, f32),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct PackedTexture {
+    pub width: u16,
+    pub height: u16,
+    pub data: Vec<u8>,
+    pub frames: Vec<Frame>,
+}
+
+pub fn repack_model_textures(
+    materials: &[dff::Material],
+    material_indices: &[usize],
+    textures: &[txd::Texture],
+) -> PackedTexture {
     // Sort our materials so that the smallest is added to the packer first.
     let texture_data_by_name: HashMap<_, _> =
         textures.iter().map(|t| (t.name.clone(), t)).collect();
-    let mut materials: Vec<_> = model
-        .material_indices
+    let mut materials: Vec<_> = material_indices
         .iter()
         .copied()
         .map(|idx| {
             (
                 idx as u16,
-                material_to_texture_data(&texture_data_by_name, &model.materials[idx]),
+                material_to_texture_data(&texture_data_by_name, &materials[idx]),
             )
         })
         .collect();
@@ -57,17 +71,22 @@ pub fn repack_model_textures(model: &dff::Model, textures: &[txd::Texture]) -> t
         }
     }
 
-    // Finally, generate our texture, and return!
-    let base_texture = &textures[0];
-
-    txd::Texture {
-        filtering: base_texture.filtering,
-        uv: base_texture.uv,
-        name: String::new(),
-        mask_name: String::new(),
+    PackedTexture {
         width: width.try_into().unwrap(),
         height: height.try_into().unwrap(),
         data: new_texture_data,
+        frames: material_indices
+            .iter()
+            .map(|i| {
+                let frame = packer.get_frame(&(*i as u16)).unwrap();
+                let r = frame.frame;
+                let (width, height) = (width as f32, height as f32);
+                Frame {
+                    top_left: (r.left() as f32 / width, r.top() as f32 / height),
+                    bottom_right: (r.right() as f32 / width, r.bottom() as f32 / height),
+                }
+            })
+            .collect(),
     }
 }
 
@@ -78,7 +97,7 @@ fn material_to_texture_data(
     let base_color = material.color;
     if let Some(texture) = &material.texture {
         let texture = texture_data_by_name.get(&texture.name).unwrap();
-        let base_color = apply_to_vec4(base_color.as_array(), remap_u8_to_f32);
+        let base_color = base_color.as_array().map(remap_u8_to_f32);
 
         let mut buf: [u8; 4] = [0; 4];
         let data: Vec<_> = texture
@@ -86,16 +105,14 @@ fn material_to_texture_data(
             .chunks_exact(4)
             .flat_map(|col| {
                 buf.copy_from_slice(col);
-                let tex_color = apply_to_vec4(buf, remap_u8_to_f32);
-                apply_to_vec4(
-                    [
-                        tex_color[0] * base_color[0],
-                        tex_color[1] * base_color[1],
-                        tex_color[2] * base_color[2],
-                        tex_color[3] * base_color[3],
-                    ],
-                    remap_f32_to_u8,
-                )
+                let tex_color = buf.map(remap_u8_to_f32);
+                [
+                    tex_color[0] * base_color[0],
+                    tex_color[1] * base_color[1],
+                    tex_color[2] * base_color[2],
+                    tex_color[3] * base_color[3],
+                ]
+                .map(remap_f32_to_u8)
             })
             .collect();
 
@@ -119,8 +136,4 @@ fn remap_u8_to_f32(c: u8) -> f32 {
 
 fn remap_f32_to_u8(c: f32) -> u8 {
     (c * 255.0) as u8
-}
-
-fn apply_to_vec4<T: Copy, U>(v: [T; 4], f: impl Fn(T) -> U) -> [U; 4] {
-    [f(v[0]), f(v[1]), f(v[2]), f(v[3])]
 }
