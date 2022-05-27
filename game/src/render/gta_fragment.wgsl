@@ -474,9 +474,7 @@ struct FragmentInput {
 fn fragment(in: FragmentInput) -> [[location(0)]] vec4<f32> {
     var output_color: vec4<f32> = material.base_color;
     output_color = output_color * vec4<f32>(
-        hsv_to_rgb(vec3<f32>(
-            f32(in.material_id) / f32(material.material_count - 1u), 0.75, 0.75
-        )),
+        hsv2rgb(f32(in.material_id) / f32(material.material_count - 1u), 0.75, 0.75),
         1.0
     );
 
