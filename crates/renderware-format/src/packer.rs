@@ -96,38 +96,41 @@ fn material_to_texture_data(
 ) -> (Vec<u8>, u32, u32) {
     let base_color = material.color;
     if let Some(texture) = &material.texture {
-        let texture = texture_data_by_name.get(&texture.name).unwrap();
-        let base_color = base_color.as_array().map(remap_u8_to_f32);
-
-        let mut buf: [u8; 4] = [0; 4];
-        let data: Vec<_> = texture
-            .data
-            .chunks_exact(4)
-            .flat_map(|col| {
-                buf.copy_from_slice(col);
-                let tex_color = buf.map(remap_u8_to_f32);
-                [
-                    tex_color[0] * base_color[0],
-                    tex_color[1] * base_color[1],
-                    tex_color[2] * base_color[2],
-                    tex_color[3] * base_color[3],
-                ]
-                .map(remap_f32_to_u8)
-            })
-            .collect();
-
-        (data, texture.width as _, texture.height as _)
-    } else {
-        let width = 8;
-        let height = 8;
-
-        let data = std::iter::repeat(base_color.as_array())
-            .take((width * height) as usize)
-            .flatten()
-            .collect::<Vec<_>>();
-
-        (data, width, height)
+        if let Some(texture) = texture_data_by_name.get(&texture.name) {
+            return texture_to_texture_data(base_color, texture);
+        }
     }
+
+    let width = 8;
+    let height = 8;
+
+    let data = std::iter::repeat(base_color.as_array())
+        .take((width * height) as usize)
+        .flatten()
+        .collect::<Vec<_>>();
+
+    (data, width, height)
+}
+
+fn texture_to_texture_data(base_color: txd::Color, texture: &txd::Texture) -> (Vec<u8>, u32, u32) {
+    let base_color = base_color.as_array().map(remap_u8_to_f32);
+    let mut buf: [u8; 4] = [0; 4];
+    let data: Vec<_> = texture
+        .data
+        .chunks_exact(4)
+        .flat_map(|col| {
+            buf.copy_from_slice(col);
+            let tex_color = buf.map(remap_u8_to_f32);
+            [
+                tex_color[0] * base_color[0],
+                tex_color[1] * base_color[1],
+                tex_color[2] * base_color[2],
+                tex_color[3] * base_color[3],
+            ]
+            .map(remap_f32_to_u8)
+        })
+        .collect();
+    (data, texture.width as _, texture.height as _)
 }
 
 fn remap_u8_to_f32(c: u8) -> f32 {
