@@ -39,8 +39,13 @@
 [[group(2), binding(0)]]
 var<uniform> mesh: Mesh;
 
+struct SubmaterialData {
+    color: vec4<f32>;
+    uv_top_left: vec2<f32>;
+    uv_bottom_right: vec2<f32>;
+};
+
 struct GtaMaterial {
-    base_color: vec4<f32>;
     emissive: vec4<f32>;
     perceptual_roughness: f32;
     metallic: f32;
@@ -48,7 +53,8 @@ struct GtaMaterial {
     // 'flags' is a bit field indicating various options. u32 is 32 bits so we have up to 32 options.
     flags: u32;
     alpha_cutoff: f32;
-    material_count: u32;
+    submaterial_count: u32;
+    submaterials: array<SubmaterialData, 32>;
 };
 
 let GTA_MATERIAL_FLAGS_BASE_COLOR_TEXTURE_BIT: u32         = 1u;
@@ -467,20 +473,30 @@ struct FragmentInput {
 #ifdef VERTEX_TANGENTS
     [[location(3)]] world_tangent: vec4<f32>;
 #endif
-    [[location(4)]] material_id: u32;
+    [[location(4)]] submaterial_id: u32;
 };
+
+fn remap_uv(uv: vec2<f32>, tl: vec2<f32>, br: vec2<f32>) -> vec2<f32> {
+    let size = br - tl;
+    let uv = abs(uv % vec2<f32>(1.0, 1.0));
+    return tl + uv * size;
+}
 
 [[stage(fragment)]]
 fn fragment(in: FragmentInput) -> [[location(0)]] vec4<f32> {
-    var output_color: vec4<f32> = material.base_color;
-    output_color = output_color * vec4<f32>(
-        hsv2rgb(f32(in.material_id) / f32(material.material_count - 1u), 0.75, 0.75),
-        1.0
-    );
-
+    var output_color: vec4<f32>;
     if ((material.flags & GTA_MATERIAL_FLAGS_BASE_COLOR_TEXTURE_BIT) != 0u) {
-        output_color = output_color * textureSample(base_color_texture, base_color_sampler, in.uv);
+        let submaterial_data = material.submaterials[in.submaterial_id];
+        let uv = remap_uv(in.uv, submaterial_data.uv_top_left, submaterial_data.uv_bottom_right);
+        output_color = textureSample(base_color_texture, base_color_sampler, uv);
+    } else {
+        output_color = material.submaterials[in.submaterial_id].color;
     }
+
+    // output_color = output_color * vec4<f32>(
+    //     hsv2rgb(f32(in.submaterial_id) / f32(material.submaterial_count - 1u), 0.75, 0.75),
+    //     1.0
+    // );
 
     // // NOTE: Unlit bit not set means == 0 is true, so the true case is if lit
     if ((material.flags & GTA_MATERIAL_FLAGS_UNLIT_BIT) == 0u) {

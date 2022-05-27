@@ -2,7 +2,7 @@ use super::{GTA_FRAGMENT_SHADER_HANDLE, GTA_VERTEX_SHADER_HANDLE};
 use bevy::{
     asset::{AssetServer, Handle},
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    math::Vec4,
+    math::{Vec2, Vec4},
     pbr::{AlphaMode, MaterialPipeline, SpecializedMaterial},
     prelude::Mesh,
     reflect::TypeUuid,
@@ -20,6 +20,8 @@ use bevy::{
     },
 };
 
+const SUBMATERIAL_MAX_COUNT: usize = 32;
+
 /// A material with "standard" properties used in PBR lighting
 /// Standard property values with pictures here
 /// <https://google.github.io/filament/Material%20Properties.pdf>.
@@ -28,10 +30,6 @@ use bevy::{
 #[derive(Debug, Clone, TypeUuid)]
 #[uuid = "029788fe-34b8-4480-b0ee-35bb82b4528d"]
 pub struct GtaMaterial {
-    /// Doubles as diffuse albedo for non-metallic, specular for metallic and a mix for everything
-    /// in between. If used together with a base_color_texture, this is factored into the final
-    /// base color as `base_color * base_color_texture_value`
-    pub base_color: Color,
     pub base_color_texture: Option<Handle<Image>>,
     // Use a color for user friendliness even though we technically don't use the alpha channel
     // Might be used in the future for exposure correction in HDR
@@ -67,12 +65,12 @@ pub struct GtaMaterial {
     pub unlit: bool,
     pub alpha_mode: AlphaMode,
     pub materials: Vec<renderware_format::dff::Material>,
+    pub frames: Option<Vec<renderware_format::packer::Frame>>,
 }
 
 impl Default for GtaMaterial {
     fn default() -> Self {
         GtaMaterial {
-            base_color: Color::rgb(1.0, 1.0, 1.0),
             base_color_texture: None,
             emissive: Color::BLACK,
             emissive_texture: None,
@@ -98,15 +96,7 @@ impl Default for GtaMaterial {
             unlit: false,
             alpha_mode: AlphaMode::Opaque,
             materials: vec![],
-        }
-    }
-}
-
-impl From<Color> for GtaMaterial {
-    fn from(color: Color) -> Self {
-        GtaMaterial {
-            base_color: color,
-            ..Default::default()
+            frames: None,
         }
     }
 }
@@ -139,12 +129,16 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Default, AsStd140)]
+pub struct GtaMaterialSubmaterialData {
+    pub color: Vec4,
+    pub uv_top_left: Vec2,
+    pub uv_bottom_right: Vec2,
+}
+
 /// The GPU representation of the uniform data of a [`GtaMaterial`].
 #[derive(Clone, Default, AsStd140)]
 pub struct GtaMaterialUniformData {
-    /// Doubles as diffuse albedo for non-metallic, specular for metallic and a mix for everything
-    /// in between.
-    pub base_color: Vec4,
     // Use a color for user friendliness even though we technically don't use the alpha channel
     // Might be used in the future for exposure correction in HDR
     pub emissive: Vec4,
@@ -160,8 +154,9 @@ pub struct GtaMaterialUniformData {
     /// When the alpha mode mask flag is set, any base color alpha above this cutoff means fully opaque,
     /// and any below means fully transparent.
     pub alpha_cutoff: f32,
-    /// The number of materials. (Temporary!)
-    pub material_count: u32,
+    /// The number of submaterials.
+    pub submaterial_count: u32,
+    pub submaterials: [GtaMaterialSubmaterialData; SUBMATERIAL_MAX_COUNT],
 }
 
 /// The GPU representation of a [`GtaMaterial`].
@@ -289,18 +284,32 @@ impl RenderAsset for GtaMaterial {
             AlphaMode::Blend => flags |= GtaMaterialFlags::ALPHA_MODE_BLEND,
         };
 
-        let value = GtaMaterialUniformData {
-            base_color: material.base_color.as_linear_rgba_f32().into(),
+        let submaterials = &material.materials;
+        assert!(submaterials.len() < SUBMATERIAL_MAX_COUNT);
+        let mut value = GtaMaterialUniformData {
             emissive: material.emissive.into(),
             roughness: material.perceptual_roughness,
             metallic: material.metallic,
             reflectance: material.reflectance,
             flags: flags.bits(),
             alpha_cutoff,
-            material_count: material.materials.len() as u32,
+            submaterial_count: submaterials.len() as u32,
+            submaterials: Default::default(),
         };
+        for (idx, submaterial) in submaterials.iter().enumerate() {
+            let c = submaterial.color;
+            let frame = material.frames.as_ref().map(|f| f[idx]);
+            let (uv_top_left, uv_bottom_right) = match frame {
+                Some(f) => (f.top_left.into(), f.bottom_right.into()),
+                None => (Vec2::ZERO, Vec2::ZERO),
+            };
+            value.submaterials[idx] = GtaMaterialSubmaterialData {
+                color: Color::rgba_u8(c.r, c.g, c.b, c.a).into(),
+                uv_top_left,
+                uv_bottom_right,
+            };
+        }
         let value_std140 = value.as_std140();
-
         let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("gta_material_uniform_buffer"),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,

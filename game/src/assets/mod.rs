@@ -4,9 +4,15 @@ mod dat;
 mod dff;
 mod ide;
 mod ipl;
-mod txd;
+pub mod txd;
 
-pub use self::{dat::Dat, dff::Dff, ide::Ide, ipl::Ipl};
+pub use self::{
+    dat::Dat,
+    dff::{Dff, Model},
+    ide::Ide,
+    ipl::Ipl,
+    txd::{Texture, Txd},
+};
 
 pub struct ViceCityPluginGroup;
 impl PluginGroup for ViceCityPluginGroup {

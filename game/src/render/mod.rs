@@ -55,7 +55,6 @@ impl Plugin for RenderPlugin {
             .set_untracked(
                 Handle::<GtaMaterial>::default(),
                 GtaMaterial {
-                    base_color: Color::WHITE,
                     unlit: true,
                     ..default()
                 },

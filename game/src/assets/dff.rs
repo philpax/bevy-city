@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadedAsset},
     prelude::*,
@@ -12,7 +10,6 @@ use bevy::{
 };
 
 use renderware_format as rwf;
-use rwf::dff::Vec3;
 
 #[derive(Default)]
 pub struct DffLoader;
@@ -33,14 +30,16 @@ impl AssetLoader for DffLoader {
 }
 
 pub struct Model {
-    pub name: String,
     pub mesh: Mesh,
+    pub transform: Transform,
     pub materials: Vec<rwf::dff::Material>,
+    pub material_indices: Vec<usize>,
 }
 
 #[derive(TypeUuid)]
 #[uuid = "7f24d251-ce34-4078-85b8-a8f99fc790db"]
 pub struct Dff {
+    pub name: String,
     pub models: Vec<Model>,
 }
 
@@ -48,26 +47,25 @@ async fn load_dff<'a, 'b>(
     bytes: &'a [u8],
     load_context: &'a mut LoadContext<'b>,
 ) -> anyhow::Result<()> {
-    let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
-    let models = rwf::dff::Model::from_raw(&raw);
-
-    load_context.set_default_asset(LoadedAsset::new(Dff {
-        models: models
-            .iter()
-            .map(|(_, model)| rwf_model_to_bevy_model(model, load_context.path()))
-            .collect(),
-    }));
-
-    Ok(())
-}
-
-fn rwf_model_to_bevy_model(model: &rwf::dff::Model, path: &Path) -> Model {
-    let name = path
+    let name = load_context
+        .path()
         .file_stem()
         .expect("failed to extract filestem")
         .to_string_lossy()
         .to_string();
 
+    let raw = rwf::raw::BinaryStreamFile::from_bytes(bytes)?;
+    let models = rwf::dff::Model::from_raw(&raw)
+        .into_iter()
+        .map(rwf_model_to_bevy_model)
+        .collect();
+
+    load_context.set_default_asset(LoadedAsset::new(Dff { name, models }));
+
+    Ok(())
+}
+
+fn rwf_model_to_bevy_model((transform, model): (rwf::dff::Transform, rwf::dff::Model)) -> Model {
     let mesh = {
         let mut mesh = Mesh::new(match model.topology {
             rwf::dff::Topology::TriangleList => PrimitiveTopology::TriangleList,
@@ -79,7 +77,7 @@ fn rwf_model_to_bevy_model(model: &rwf::dff::Model, path: &Path) -> Model {
         let mut uvs = vec![];
         let mut material_ids = vec![];
         for vertex in &model.vertices {
-            let Vec3 { x, y, z } = vertex.position;
+            let rwf::dff::Vec3 { x, y, z } = vertex.position;
             positions.push([x, z, -y]);
             normals.push(vertex.normal.as_array());
             uvs.push(vertex.uv);
@@ -89,17 +87,23 @@ fn rwf_model_to_bevy_model(model: &rwf::dff::Model, path: &Path) -> Model {
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.insert_attribute(crate::render::ATTRIBUTE_MATERIAL_ID, material_ids);
-        mesh.set_indices(Some(Indices::U16(model.indices.clone())));
+        mesh.set_indices(Some(Indices::U16(model.indices)));
         mesh.duplicate_vertices();
         mesh.compute_flat_normals();
         mesh
     };
-
-    let materials = model.materials.clone();
+    let transform = Transform {
+        translation: transform.translation.as_array().into(),
+        rotation: Quat::from_mat3(&Mat3::from_cols_array(&transform.rotation.0)),
+        scale: Vec3::new(1.0, 1.0, 1.0),
+    };
+    let materials = model.materials;
+    let material_indices = model.material_indices;
     Model {
-        name,
         mesh,
+        transform,
         materials,
+        material_indices,
     }
 }
 

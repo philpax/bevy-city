@@ -17,7 +17,7 @@ use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
 use clap::Parser;
 
 pub mod assets;
-use assets::{Dat, Dff, Ide, Ipl};
+use assets::{Dat, Dff, Ide, Ipl, Txd};
 
 pub mod render;
 use render::*;
@@ -247,11 +247,13 @@ fn process_pending_desired_meshes(
     mut commands: Commands,
     mut materials: ResMut<Assets<GtaMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
     mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
     loaded_ides: Res<LoadedIdes>,
     model_texture_map: Res<ModelTextureMap>,
     asset_server: Res<AssetServer>,
     asset_meshes: Res<Assets<Dff>>,
+    asset_txds: Res<Assets<Txd>>,
 ) {
     if *loaded_ides != LoadedIdes::Processed {
         return;
@@ -263,43 +265,95 @@ fn process_pending_desired_meshes(
         }
 
         if let Some(dff) = asset_meshes.get(handle.clone()) {
-            for model in &dff.models {
-                let mesh = meshes.add(model.mesh.clone());
-                let model_material = model.materials.get(0);
-
-                let base_color = model_material
-                    .map(|m| Color::rgba_u8(m.color.r, m.color.g, m.color.b, m.color.a))
-                    .unwrap_or(Color::WHITE);
-
-                let base_color_texture = model_texture_map
-                    .0
-                    .get(&model.name)
-                    .zip(model_material.and_then(|m| m.texture.as_ref()))
-                    .map(|(name, texture)| {
-                        asset_server.load(&format!(
-                            "models/gta3/{}.txd#{}",
-                            name.replace("generic", "Generic"),
-                            texture.name
-                        ))
-                    });
-
-                commands.spawn_bundle(GtaBundle {
-                    mesh,
-                    material: materials.add(GtaMaterial {
-                        base_color,
-                        base_color_texture,
-                        materials: model.materials.clone(),
-                        unlit: true,
-                        ..default()
-                    }),
-                    transform: *transform,
-                    ..default()
-                });
+            if let Some(bundles) = attempt_to_spawn_dff(
+                &mut materials,
+                &mut meshes,
+                &mut images,
+                &asset_server,
+                &asset_txds,
+                &model_texture_map,
+                dff,
+                *transform,
+            ) {
+                for bundle in bundles {
+                    commands.spawn_bundle(bundle);
+                }
+                *spawned = true;
             }
-
-            *spawned = true;
         }
     }
+}
+
+pub fn packed_texture_to_image(texture: &renderware_format::packer::PackedTexture) -> Image {
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+    Image::new(
+        Extent3d {
+            width: texture.width as _,
+            height: texture.height as _,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        texture.data.clone(),
+        TextureFormat::Rgba8Unorm,
+    )
+}
+
+fn attempt_to_spawn_dff(
+    gta_materials: &mut Assets<GtaMaterial>,
+    meshes: &mut Assets<Mesh>,
+    images: &mut Assets<Image>,
+    asset_server: &AssetServer,
+    asset_txds: &Assets<Txd>,
+    model_texture_map: &ModelTextureMap,
+    dff: &Dff,
+    transform: Transform,
+) -> Option<Vec<GtaBundle>> {
+    // If this model has an associated texture, load the texture.
+    // If the texture is not loaded yet, do not attempt to spawn this model, and try again later.
+    let texture_handle: Option<Handle<Txd>> = model_texture_map.0.get(&dff.name).map(|name| {
+        asset_server.load(&format!(
+            "models/gta3/{}.txd",
+            name.replace("generic", "Generic")
+        ))
+    });
+    let txd = match texture_handle {
+        Some(handle) => match asset_txds.get(handle) {
+            Some(txd) => Some(txd),
+            None => return None,
+        },
+        None => None,
+    };
+
+    let model_to_bundle = |model: &assets::Model| {
+        let mesh = meshes.add(model.mesh.clone());
+        let material = {
+            let packed_texture = txd.map(|txd| {
+                renderware_format::packer::repack_model_textures(
+                    &model.materials,
+                    &model.material_indices,
+                    &txd.textures,
+                )
+            });
+
+            gta_materials.add(GtaMaterial {
+                base_color_texture: packed_texture
+                    .as_ref()
+                    .map(|pt| images.add(packed_texture_to_image(pt))),
+                materials: model.materials.clone(),
+                frames: packed_texture.as_ref().map(|pt| pt.frames.clone()),
+                ..default()
+            })
+        };
+
+        GtaBundle {
+            mesh,
+            material,
+            transform,
+            ..default()
+        }
+    };
+
+    Some(dff.models.iter().map(model_to_bundle).collect())
 }
 
 fn process_pending_ides(
