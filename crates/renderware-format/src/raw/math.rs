@@ -24,10 +24,13 @@ impl Vec3 {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Mat3(pub [Vec3; 3]);
+pub struct Mat3(pub [f32; 9]);
 impl Mat3 {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, (r0, r1, r2)) = tuple((Vec3::parse, Vec3::parse, Vec3::parse))(input)?;
-        Ok((input, Mat3([r0, r1, r2])))
+        let (input, data) = nom::multi::count(nc::le_f32, 9)(input)?;
+
+        let mut buf = [0.0; 9];
+        buf.copy_from_slice(&data);
+        Ok((input, Mat3(buf)))
     }
 }
