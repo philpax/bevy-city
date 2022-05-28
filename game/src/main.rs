@@ -45,6 +45,8 @@ enum PendingIpls {
     Loaded(Vec<Handle<Ipl>>),
 }
 struct ModelTextureMap(HashMap<String, String>);
+type DffAssetHandles = (Handle<Mesh>, Handle<GtaMaterial>);
+struct DffCache(HashMap<String, Vec<DffAssetHandles>>);
 struct GameTime(f32);
 #[derive(Component)]
 struct Sun;
@@ -68,7 +70,8 @@ fn main() -> anyhow::Result<()> {
         .add_plugin(EditorPlugin)
         .insert_resource(DesiredAssetMeshes(vec![]))
         .insert_resource(LoadedIdes::Unloaded)
-        .insert_resource(ModelTextureMap(HashMap::new()));
+        .insert_resource(ModelTextureMap(HashMap::new()))
+        .insert_resource(DffCache(HashMap::new()));
 
     // Loading systems
     app.add_startup_system(load_vice_city_dat)
@@ -249,6 +252,7 @@ fn process_pending_desired_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut desired_asset_meshes: ResMut<DesiredAssetMeshes>,
+    mut dff_cache: ResMut<DffCache>,
     loaded_ides: Res<LoadedIdes>,
     model_texture_map: Res<ModelTextureMap>,
     asset_server: Res<AssetServer>,
@@ -259,16 +263,13 @@ fn process_pending_desired_meshes(
         return;
     }
 
-    for (handle, transform, spawned) in &mut desired_asset_meshes.0 {
-        if *spawned {
-            continue;
-        }
-
+    for (handle, transform, spawned) in desired_asset_meshes.0.iter_mut().filter(|(_, _, s)| !*s) {
         if let Some(dff) = asset_meshes.get(handle.clone()) {
             if let Some(bundles) = attempt_to_spawn_dff(
                 &mut materials,
                 &mut meshes,
                 &mut images,
+                &mut dff_cache,
                 &asset_server,
                 &asset_txds,
                 &model_texture_map,
@@ -302,6 +303,7 @@ fn attempt_to_spawn_dff(
     gta_materials: &mut Assets<GtaMaterial>,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
+    dff_cache: &mut DffCache,
     asset_server: &AssetServer,
     asset_txds: &Assets<Txd>,
     model_texture_map: &ModelTextureMap,
@@ -325,50 +327,71 @@ fn attempt_to_spawn_dff(
         None => None,
     };
 
-    let model_to_bundle = |model: &assets::Model| {
-        let mesh = meshes.add(model.mesh.clone());
-        let material = {
-            let packed_texture = txd.map(|txd| {
-                renderware_format::packer::repack_model_textures(
-                    &model.materials,
-                    &model.material_indices,
-                    &txd.textures,
-                )
-            });
+    let cache_entry = dff_cache.0.entry(dff.name.clone()).or_insert_with(|| {
+        dff.models
+            .iter()
+            .map(|model: &assets::Model| {
+                let packed_texture = txd.map(|txd| {
+                    renderware_format::packer::repack_model_textures(
+                        &model.materials,
+                        &model.material_indices,
+                        &txd.textures,
+                    )
+                });
 
-            if packed_texture
-                .as_ref()
-                .map(|pt| pt.frames.len())
-                .unwrap_or_default()
-                > render::gta_material::SUBMATERIAL_MAX_COUNT
-            {
-                panic!(
-                    "the dff {}.dff ({}) exceeds the submaterial count with {}",
-                    dff.name,
-                    texture_path.as_ref().unwrap_or(&String::new()),
-                    packed_texture.unwrap().frames.len()
-                );
-            }
-
-            gta_materials.add(GtaMaterial {
-                base_color_texture: packed_texture
+                if packed_texture
                     .as_ref()
-                    .map(|pt| images.add(packed_texture_to_image(pt))),
-                materials: model.materials.clone(),
-                frames: packed_texture.as_ref().map(|pt| pt.frames.clone()),
+                    .map(|pt| pt.frames.len())
+                    .unwrap_or_default()
+                    > render::gta_material::SUBMATERIAL_MAX_COUNT
+                {
+                    panic!(
+                        "the dff {}.dff ({}) exceeds the submaterial count with {}",
+                        dff.name,
+                        texture_path.as_ref().unwrap_or(&String::new()),
+                        packed_texture.unwrap().frames.len()
+                    );
+                }
+
+                let mesh = meshes.add(model.mesh.clone());
+                let material = gta_materials.add(GtaMaterial {
+                    base_color_texture: packed_texture.as_ref().map(|pt| {
+                        use bevy::render::render_resource::{
+                            Extent3d, TextureDimension, TextureFormat,
+                        };
+                        let asset = Image::new(
+                            Extent3d {
+                                width: pt.width as _,
+                                height: pt.height as _,
+                                depth_or_array_layers: 1,
+                            },
+                            TextureDimension::D2,
+                            pt.data.clone(),
+                            TextureFormat::Rgba8Unorm,
+                        );
+                        images.add(asset)
+                    }),
+                    materials: model.materials.clone(),
+                    frames: packed_texture.as_ref().map(|pt| pt.frames.clone()),
+                    ..default()
+                });
+
+                (mesh, material)
+            })
+            .collect()
+    });
+
+    Some(
+        cache_entry
+            .iter()
+            .map(|(mesh, material)| GtaBundle {
+                mesh: mesh.clone(),
+                material: material.clone(),
+                transform,
                 ..default()
             })
-        };
-
-        GtaBundle {
-            mesh,
-            material,
-            transform,
-            ..default()
-        }
-    };
-
-    Some(dff.models.iter().map(model_to_bundle).collect())
+            .collect(),
+    )
 }
 
 fn process_pending_ides(
