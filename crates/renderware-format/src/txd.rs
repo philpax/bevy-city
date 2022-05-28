@@ -5,7 +5,7 @@ pub use crate::raw::{
     Color,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Texture {
     pub filtering: TextureFiltering,
     pub uv: (TextureAddressing, TextureAddressing),
@@ -17,6 +17,19 @@ pub struct Texture {
     pub height: u16,
 
     pub data: Vec<u8>,
+}
+
+impl std::fmt::Debug for Texture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Texture")
+            .field("filtering", &self.filtering)
+            .field("uv", &self.uv)
+            .field("name", &self.name)
+            .field("mask_name", &self.mask_name)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish()
+    }
 }
 
 impl Texture {
