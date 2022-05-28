@@ -20,7 +20,7 @@ use bevy::{
     },
 };
 
-pub const SUBMATERIAL_MAX_COUNT: usize = 64;
+pub const SUBMATERIAL_MAX_COUNT: usize = 256;
 
 /// A material with "standard" properties used in PBR lighting
 /// Standard property values with pictures here

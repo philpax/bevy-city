@@ -36,7 +36,7 @@
 #import bevy_pbr::mesh_struct
 #import gta::common
 
-let SUBMATERIAL_MAX_COUNT = 64;
+let SUBMATERIAL_MAX_COUNT = 256;
 
 [[group(2), binding(0)]]
 var<uniform> mesh: Mesh;
