@@ -36,7 +36,7 @@
 #import bevy_pbr::mesh_struct
 #import gta::common
 
-const SUBMATERIAL_MAX_COUNT = 64;
+let SUBMATERIAL_MAX_COUNT = 64;
 
 [[group(2), binding(0)]]
 var<uniform> mesh: Mesh;
@@ -481,7 +481,7 @@ struct FragmentInput {
 fn remap_uv(uv: vec2<f32>, tl: vec2<f32>, br: vec2<f32>) -> vec2<f32> {
     let size = br - tl;
     let uv = abs(uv % vec2<f32>(1.0, 1.0));
-    return tl + uv * size;
+    return tl + vec2<f32>(uv.x, 1.0 - uv.y) * size;
 }
 
 [[stage(fragment)]]
