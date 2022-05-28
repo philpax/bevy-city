@@ -44,6 +44,8 @@ pub fn repack_model_textures(
 
     // Start packing!
     let mut packer = tp::TexturePacker::new_skyline(tp::TexturePackerConfig {
+        max_width: 4096,
+        max_height: 4096,
         allow_rotation: false,
         texture_padding: 0,
         texture_outlines: false,
