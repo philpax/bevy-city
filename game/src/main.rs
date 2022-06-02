@@ -28,9 +28,15 @@ struct Cli {
     /// If provided, render this asset by itself
     #[clap(short, long)]
     path: Option<PathBuf>,
+
+    /// If provided, only IPLs with this in their name will be loaded
+    #[clap(short, long)]
+    ipl_filter: Option<String>,
 }
 
 struct DesiredAssetRenderPath(PathBuf);
+struct IplFilter(Option<String>);
+
 struct DesiredAssetMeshes(Vec<(Handle<Dff>, Transform, bool)>);
 struct GlobalDat(Handle<Dat>);
 #[derive(PartialEq, Eq)]
@@ -68,6 +74,7 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(assets::ViceCityPluginGroup)
         .add_plugin(RenderPlugin)
         .add_plugin(EditorPlugin)
+        .insert_resource(IplFilter(args.ipl_filter))
         .insert_resource(DesiredAssetMeshes(vec![]))
         .insert_resource(LoadedIdes::Unloaded)
         .insert_resource(ModelTextureMap(HashMap::new()))
@@ -182,6 +189,7 @@ fn handle_dat_events(
     mut pending_ipls: ResMut<PendingIpls>,
     asset_server: Res<AssetServer>,
     assets: Res<Assets<Dat>>,
+    ipl_filter: Res<IplFilter>,
 ) {
     for ev in ev_asset.iter() {
         match ev {
@@ -202,6 +210,13 @@ fn handle_dat_events(
                                 vc_dat
                                     .ipls
                                     .iter()
+                                    .filter(|p| {
+                                        ipl_filter
+                                            .0
+                                            .as_ref()
+                                            .map(|filter| p.contains(filter.as_str()))
+                                            .unwrap_or(false)
+                                    })
                                     .map(|p| asset_server.load(p.as_str()))
                                     .collect(),
                             );
